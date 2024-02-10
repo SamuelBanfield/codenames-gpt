@@ -3,3 +3,8 @@ type CodenamesTile = {
     revealed: boolean;
     team: "unknown" | "red" | "blue" | "neutral" | "assassin";
 };
+
+type CodenamesClue = {
+    word: string;
+    number: number;
+};
