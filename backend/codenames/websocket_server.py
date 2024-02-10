@@ -28,6 +28,7 @@ async def handle_websocket(websocket, path):
     # Handle incoming messages from the client
     connection = CodenamesWebsocketConnection(websocket)
     GAME.add_player(connection)
+    print(len(GAME.players))
     GAME.start()
 
     async for message in websocket:

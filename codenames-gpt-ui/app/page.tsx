@@ -6,16 +6,8 @@ const colourMap = {
   "red": "bg-red-200",
   "blue": "bg-blue-200",
   "assassin": "bg-gray-600",
-  "neutral": "bg-orange-200",
+  "neutral": "bg-yellow-100",
   "unknown": "bg-gray-200"
-}
-
-const codeNameTile = (word: string): CodenamesTile => {
-  return {
-    word: word,
-    team: Math.random() < 0.5 ? "red" : "blue",
-    revealed: false
-  };
 }
 
 const getTileColour = (tile: CodenamesTile): string => {
@@ -45,10 +37,9 @@ export default function Home() {
         console.log("Unknown message type for message", data);
     }
   };
-
-  const websocket = new WebSocket("ws://localhost:8765/");
-
+  
   useEffect(() => {
+    const websocket = new WebSocket("ws://localhost:8765/");
     websocket.onmessage = handleMessage;
     websocket.onopen = () => {
       console.log("Connected");
@@ -64,7 +55,7 @@ export default function Home() {
         {codenamesTiles.map((tile: CodenamesTile, index: number) => (
           <div
             key={index}
-            className={`${getTileColour(tile)} p-4 text-center`}
+            className={`${getTileColour(tile)} p-4 text-center rounded-sm`}
             onClick={() => setCodenamesTiles(prev => [...prev.slice(0, index), { ...prev[index], revealed: true }, ...prev.slice(index + 1)])}
           >
             {tile.word}
