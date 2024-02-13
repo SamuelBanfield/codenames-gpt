@@ -16,6 +16,6 @@ const config: Config = {
     },
   },
   plugins: [],
-  safelist: ["bg-red-200", "bg-blue-200", "bg-gray-600", "bg-orange-200", "bg-gray-200"]
+  // safelist: ["bg-red-200", "bg-blue-200", "bg-gray-600", "bg-yellow-200", "bg-gray-200"]
 }
 export default config

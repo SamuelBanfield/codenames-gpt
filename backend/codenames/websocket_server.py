@@ -1,17 +1,17 @@
 import asyncio
 import json
+import traceback
 from typing import override
 import websockets
 
-from codenames.model import CodenamesConnection, CodenamesGame
+from codenames.lobby import Lobby
+from codenames.model import CodenamesConnection, User
 
 # import logging
 # logging.basicConfig(level=logging.INFO)
 
 HOST = "localhost"
 PORT = 8765
-
-GAME = CodenamesGame()
 
 class CodenamesWebsocketConnection(CodenamesConnection):
 
@@ -21,20 +21,35 @@ class CodenamesWebsocketConnection(CodenamesConnection):
 
     @override
     async def send(self, message):
+        # print(f"Sending message to client: {message}")
         await self.socket.send(message)
 
-async def handle_websocket(websocket, path):
-    print("New connection")
-    # Handle incoming messages from the client
-    connection = CodenamesWebsocketConnection(websocket)
-    GAME.add_player(connection)
-    print(len(GAME.players))
-    GAME.start()
+LOBBY = Lobby()
 
-    async for message in websocket:
-        # Process the message
-        print(f"Received message: {message}")
-        await GAME.request(connection, json.loads(message))
+async def handle_websocket(websocket, path):
+    print(f"New connection")
+    connection = CodenamesWebsocketConnection(websocket)
+    user = User(connection)
+    LOBBY.add_user(user)
+    print(f"There are now {len(LOBBY.users)} open connections")
+    try:
+        async for message in websocket:
+            # Process the message
+            json_message = json.loads(message)
+            if "clientMessageType" in json_message and json_message["clientMessageType"] == "idRequest":
+                # Silently send id to user
+                to_send = json.dumps({"serverMessageType": "idAssign", "uuid": str(connection.uuid)})
+                print(f"Sending message: {to_send}")
+                await connection.send(to_send)
+            else:
+                print(f"Received message: {json_message}")
+                await LOBBY.request(user, json_message)
+    except Exception as e:
+        if not isinstance(e, websockets.exceptions.ConnectionClosed):
+            print(f"Encountered exception: {traceback.format_exc()}")
+    finally:
+        LOBBY.remove_user(user)
+        print(f"Connection for user {user.connection.uuid} closed")
 
 async def main():
     async with websockets.serve(handle_websocket, HOST, PORT):

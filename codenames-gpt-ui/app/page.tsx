@@ -1,67 +1,49 @@
 "use client";
 
-import { useState, useEffect } from "react"
+import { useEffect, useState } from "react"
+import GameComponent from "./_components/game_component";
+import Lobby, { Player } from "./_components/lobby";
 
-const colourMap = {
-  "red": "bg-red-200",
-  "blue": "bg-blue-200",
-  "assassin": "bg-gray-600",
-  "neutral": "bg-yellow-100",
-  "unknown": "bg-gray-200"
-}
-
-const getTileColour = (tile: CodenamesTile): string => {
-  return colourMap[tile.revealed ? tile.team : "unknown"];
-}
+const websocket = new WebSocket("ws://localhost:8765/");
+websocket.onopen = () => {
+  console.log("Connected");
+};
 
 export default function Home() {
 
-  const words: string[] = [];
-
-  const initialClue: CodenamesClue = {
-    word: "fruit",
-    number: 3
-  };
-
-  const [codenamesTiles, setCodenamesTiles] = useState<CodenamesTile[]>([]);
-  const [codenamesClue, setCodenamesClue] = useState<CodenamesClue>(initialClue);
-
-  const handleMessage = (event: MessageEvent) => {
-    console.log("message", event.data);
-    const data = JSON.parse(event.data);
-    switch (data.serverMessageType) {
-      case "tilesUpdate":
-        setCodenamesTiles(data.tiles);
-        break;
-      default:
-        console.log("Unknown message type for message", data);
+  const [player, setPlayer] = useState<Player>(
+    {
+      name: "",
+      uuid: null,
+      role: null,
+      ready: false,
+      inGame: false
     }
-  };
-  
-  useEffect(() => {
-    const websocket = new WebSocket("ws://localhost:8765/");
-    websocket.onmessage = handleMessage;
-    websocket.onopen = () => {
-      console.log("Connected");
-      websocket.send(JSON.stringify({ clientMessageType: "tilesRequest" }));
-    };
+  );
 
+  const handleIdMessage = (event: MessageEvent) => {
+    const data = JSON.parse(event.data);
+    if (data.serverMessageType === "idAssign") {
+      console.log("idAssign", data.uuid);
+      setPlayer({ ...player, uuid: data.uuid });
+    }
+    else {
+      console.log("Unknown message type for message", data);
+    }
+  }
+
+  useEffect(() => {
+    websocket.onmessage = handleIdMessage
+    websocket.send(JSON.stringify({ clientMessageType: "idRequest" }));
   }, []);
 
+
   return (
-    <main className="flex min-h-screen flex-col items-center p-24">
-      <h1 className="text-2xl font-bold mb-4">{codenamesClue.word}, {codenamesClue.number}</h1>
-      <div className="grid grid-cols-5 gap-4">
-        {codenamesTiles.map((tile: CodenamesTile, index: number) => (
-          <div
-            key={index}
-            className={`${getTileColour(tile)} p-4 text-center rounded-sm`}
-            onClick={() => setCodenamesTiles(prev => [...prev.slice(0, index), { ...prev[index], revealed: true }, ...prev.slice(index + 1)])}
-          >
-            {tile.word}
-          </div>
-        ))}
-      </div>
+    <main>
+      {player.uuid && <div>
+        {!player.inGame ? <Lobby websocket={websocket} player={player} setPlayer={setPlayer} />
+                : <GameComponent websocket={websocket} player={player} />}
+      </div>}
     </main>
   );
 }
