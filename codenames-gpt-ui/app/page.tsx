@@ -5,9 +5,6 @@ import GameComponent from "./_components/game_component";
 import Lobby, { Player } from "./_components/lobby";
 
 const websocket = new WebSocket("ws://localhost:8765/");
-websocket.onopen = () => {
-  console.log("Connected");
-};
 
 export default function Home() {
 
@@ -34,11 +31,18 @@ export default function Home() {
 
   useEffect(() => {
     websocket.onmessage = handleIdMessage
-    websocket.send(JSON.stringify({ clientMessageType: "idRequest" }));
-  }, []);
+    if (websocket.readyState === websocket.OPEN) {
+      websocket.send(JSON.stringify({ clientMessageType: "idRequest" }));
+    }
+    else {
+      websocket.onopen = () => websocket.send(JSON.stringify({ clientMessageType: "idRequest" }));
+    }
+    }, []
+  );
 
 
   return (
+    websocket.readyState === websocket.CONNECTING ? <div>Connecting...</div> :
     <main>
       {player.uuid && <div>
         {!player.inGame ? <Lobby websocket={websocket} player={player} setPlayer={setPlayer} />

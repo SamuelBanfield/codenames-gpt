@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { Player, Role } from "./lobby";
 
-const colourMap = {
+const notRevealedColourMap = {
     "red": "bg-red-200",
     "blue": "bg-blue-200",
     "assassin": "bg-gray-600",
@@ -11,8 +11,25 @@ const colourMap = {
     "unknown": "bg-gray-200"
 }
 
+const revealedColourMap = {
+    "red": "bg-red-500",
+    "blue": "bg-blue-500",
+    "assassin": "bg-gray-800",
+    "neutral": "bg-yellow-500",
+    "unknown": "bg-gray-200"
+}
+
+const roleTurnToDisplayMap = {
+    0: "The Red spymaster is thinking of a clue",
+    1: "The Blue spymaster is thinking of a clue",
+    2: "The Red team are guessing",
+    3: "The Blue team are guessing"
+}
+
 const getTileColour = (tile: CodenamesTile): string => {
-  return colourMap[tile.revealed ? tile.team : "unknown"];
+  return tile.revealed === true
+    ? revealedColourMap[tile.team]
+    : notRevealedColourMap[tile.team];
 }
 
 export default function GameComponent(gameProps: { websocket: WebSocket, player: Player}) {
@@ -25,7 +42,7 @@ export default function GameComponent(gameProps: { websocket: WebSocket, player:
     const [localClue, setLocalClue] = useState<string | null>(null);
     const [localNumber, setLocalNumber] = useState<number | null>(null);
 
-    const [onTurn, setOnTurn] = useState<boolean>(false);
+    const [onTurnRole, setOnTurnRole] = useState<Role | null>(null);
     const [guessesRemaining, setGuessesRemaining] = useState<number | null>(null);
   
     const handleMessage = (event: MessageEvent) => {
@@ -35,7 +52,7 @@ export default function GameComponent(gameProps: { websocket: WebSocket, player:
         case "stateUpdate":
           setCodenamesTiles(data.tiles);
           setCodenamesClue({word: data.clue?.word, number: data.clue?.number});
-          setOnTurn(data.onTurnRole === player.role);
+          setOnTurnRole(data.onTurnRole);
           if (data.guessesRemaining !== undefined) {
             setGuessesRemaining(data.guessesRemaining);
           }
@@ -45,9 +62,6 @@ export default function GameComponent(gameProps: { websocket: WebSocket, player:
           break;
         case "clueUpdate":
           setCodenamesClue(data.clue);
-          break;
-        case "onTurnUpdate":
-          setOnTurn(data.onTurn);
           break;
         default:
           console.log("Unknown message type for message", data);
@@ -73,7 +87,7 @@ export default function GameComponent(gameProps: { websocket: WebSocket, player:
       <main className="flex min-h-screen flex-col items-center p-24">
         {codenamesClue?.word && <h1 className="text-2xl font-bold mb-4">{codenamesClue?.word}, {codenamesClue?.number}</h1>}
         <div className="mb-4">
-          {onTurn && (player.role === Role.redSpymaster || player.role === Role.blueSpymaster) && (
+          {player.role === onTurnRole && (player.role === Role.redSpymaster || player.role === Role.blueSpymaster) && (
             <>
               <input
                 type="text"
@@ -93,19 +107,22 @@ export default function GameComponent(gameProps: { websocket: WebSocket, player:
             </>
           )}
         </div>
-        <p className="mb-4">{onTurn ? "It's your turn" : "It's not your turn"}</p>
+        <p className="mb-4">{
+          player.role === onTurnRole 
+            ? "It's your turn" + ((player.role === Role.redSpymaster || player.role === Role.blueSpymaster)
+              ? ", enter a clue"
+              : ", click on the word to guess")
+            : (onTurnRole ? roleTurnToDisplayMap[onTurnRole] : "")}
+            </p>
         <p className="mb-4">Guesses remaining: {guessesRemaining}</p>
-        <p className="mb-4">Team: {
-            ((player.role == Role.redSpymaster) || (player.role == Role.redPlayer)) ? "Red" : "Blue"
-          }, {
-            ((player.role == Role.redSpymaster) || (player.role == Role.blueSpymaster)) ? "You are the spymaster" : "You are guessing"
-          }
+        <p className="mb-4">
+            You are on team {((player.role == Role.redSpymaster) || (player.role == Role.redPlayer)) ? "Red" : "Blue"}
         </p>
         <div className="grid grid-cols-5 gap-4">
           {codenamesTiles.map((tile: CodenamesTile, index: number) => (
             <div
               key={index}
-              className={`${getTileColour(tile)} p-4 text-center rounded ${!tile.revealed? "cursor-pointer hover:margin-2 hover:shadow-md transition duration-300" : ""}`}
+              className={`${tile.team === "assassin" ? "text-white" : "text-black"} ${getTileColour(tile)} p-4 text-center rounded ${!tile.revealed? "cursor-pointer hover:margin-2 hover:shadow-md transition duration-300" : ""}`}
               onClick={() => {
                 if (!tile.revealed) {
                   guessTile(tile)

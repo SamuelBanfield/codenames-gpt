@@ -48,11 +48,11 @@ class Tile:
     def reveal(self):
         self.revealed = True
 
-    def __json__(self):
+    def get_json(self, for_spymaster: bool):
         return {
             "word": self.word,
             "revealed": self.revealed,
-            "team": self.team
+            "team": self.team if for_spymaster or self.revealed else "unknown"
         }
 
 def _generate_tiles():
@@ -89,17 +89,17 @@ class CodenamesGame:
             await user.connection.send(json.dumps(message))
 
     async def _broadcast_state_update(self):
-        # This is actually sort of wrong, as the information should vary by role
-        await self.send_game_message_to_all({
-            "serverMessageType": "stateUpdate",
-            "tiles": [
-                tile.__json__() for tile in self._tiles
-            ],
-            "players": [user.__json__() for user in self.users],
-            "onTurnRole": self.current_turn,
-            "guessesRemaining": self.guesses_remaining,
-            "clue": {"word": self.clue[0], "number": self.clue[1]} if self.clue else None
-        })
+        for user in self.users:
+            await user.send(json.dumps({
+                "serverMessageType": "stateUpdate",
+                "tiles": [
+                    tile.get_json(user.is_spy_master) for tile in self._tiles
+                ],
+                "players": [user.__json__() for user in self.users],
+                "onTurnRole": self.current_turn,
+                "guessesRemaining": self.guesses_remaining,
+                "clue": {"word": self.clue[0], "number": self.clue[1]} if self.clue else None
+            }))
 
     async def guess_tile(self, user: User, tile):
         if self.current_turn == ROLES.index((user.team, user.is_spy_master)) and not user.is_spy_master:
@@ -111,7 +111,7 @@ class CodenamesGame:
                 self.guesses_remaining -= 1
             else:
                 self.guesses_remaining = 0
-            if self.guesses_remaining == 0:
+            if self.guesses_remaining <= 0:
                 self.current_turn = ROLES.index(("red" if user.team == "blue" else "blue", True))
                 self.clue = None
             await self._broadcast_state_update()
@@ -121,6 +121,7 @@ class CodenamesGame:
     async def provide_clue(self, user, word, number):
         if self.current_turn == ROLES.index((user.team, user.is_spy_master)) and user.is_spy_master:
             self.clue = (word, number)
+            self.guesses_remaining = number
             self.current_turn = ROLES.index((user.team, False))
             await self._broadcast_state_update()
         else:
