@@ -20,7 +20,7 @@ class Lobby:
             self.game = None
 
     def all_ready(self) -> bool:
-        return all(user.is_ready for user in self.users)
+        return all(user.is_ready for user in self.users if user.name != None and user.name != "")
     
     async def send_all(self, message):
         print(f"Sending message to all: {message["serverMessageType"]}")

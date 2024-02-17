@@ -1,5 +1,6 @@
 import asyncio
 import json
+import pathlib
 import traceback
 from typing import override
 import websockets
@@ -10,8 +11,16 @@ from codenames.model import CodenamesConnection, User
 # import logging
 # logging.basicConfig(level=logging.INFO)
 
-HOST = "localhost"
-PORT = 8765
+properties_file_path = pathlib.Path(__file__).parent.parent / ".properties.json"
+
+try:
+    with open(properties_file_path) as property_file:
+        properties = json.load(property_file)
+except FileNotFoundError as e:
+    raise FileNotFoundError(f"Could not find .properties.json file: {e}")
+
+HOST = properties["host"]
+PORT = properties["websocketPort"]
 
 class CodenamesWebsocketConnection(CodenamesConnection):
 

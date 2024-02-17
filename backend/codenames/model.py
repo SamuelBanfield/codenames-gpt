@@ -1,7 +1,7 @@
 import json
 import pathlib
 import random
-from typing import List, Literal
+from typing import List
 import uuid
 
 # Yuck
@@ -26,8 +26,8 @@ class User:
         self.team = None
 
     async def send(self, message):
-        print(f"Sending message to {self.name}: {message}")
-        await self.connection.send(message)
+        print(f"Sending message to {self.name}: {message["serverMessageType"]}")
+        await self.connection.send(json.dumps(message))
 
     def __json__(self):
         return {
@@ -90,7 +90,7 @@ class CodenamesGame:
 
     async def _broadcast_state_update(self):
         for user in self.users:
-            await user.send(json.dumps({
+            await user.send({
                 "serverMessageType": "stateUpdate",
                 "tiles": [
                     tile.get_json(user.is_spy_master) for tile in self._tiles
@@ -99,7 +99,7 @@ class CodenamesGame:
                 "onTurnRole": self.current_turn,
                 "guessesRemaining": self.guesses_remaining,
                 "clue": {"word": self.clue[0], "number": self.clue[1]} if self.clue else None
-            }))
+            })
 
     async def guess_tile(self, user: User, tile):
         if self.current_turn == ROLES.index((user.team, user.is_spy_master)) and not user.is_spy_master:

@@ -4,7 +4,9 @@ import { useEffect, useState } from "react"
 import GameComponent from "./_components/game_component";
 import Lobby, { Player } from "./_components/lobby";
 
-const websocket = new WebSocket("ws://localhost:8765/");
+import options from "../.properties.json";
+
+const initial = new WebSocket(`ws://${options.host}:${options.websocketPort}/`);
 
 export default function Home() {
 
@@ -17,6 +19,8 @@ export default function Home() {
       inGame: false
     }
   );
+
+  const [websocket, setWebsocket] = useState<WebSocket>(initial);
 
   const handleIdMessage = (event: MessageEvent) => {
     const data = JSON.parse(event.data);
@@ -43,12 +47,10 @@ export default function Home() {
 
   return (
     websocket.readyState === websocket.CONNECTING ? <div>Connecting...</div> :
-    <main>
-      {player.uuid && <div>
+      player.uuid && <div>
         {!player.inGame ? <Lobby websocket={websocket} player={player} setPlayer={setPlayer} />
                 : <GameComponent websocket={websocket} player={player} />}
-      </div>}
-    </main>
+      </div>
   );
 }
 
