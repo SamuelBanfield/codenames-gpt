@@ -1,5 +1,7 @@
 import json
 from typing import List, Optional
+from codenames.gpt.agent import GPTAgent
+from codenames.gpt.gpt_connection import GPTConnection
 
 from codenames.model import CodenamesConnection, CodenamesGame, User
 
@@ -25,8 +27,8 @@ class Lobby:
     async def send_all(self, message):
         print(f"Sending message to all: {message["serverMessageType"]}")
         for user in self.users:
-            await user.connection.send(json.dumps(message))
-    
+            await user.connection.send(message)
+
     async def request(self, user: User, message: json):
         if self.game:
             await self.game.request(user, message)
@@ -50,7 +52,32 @@ class Lobby:
                     if "role" in player_data and player_data["role"] is not None:
                         user.team, user.is_spy_master = ROLES[int(player_data["role"])]
                 if self.all_ready():
-                    self.game = CodenamesGame(self.users)
+                    agent = GPTAgent()
+                    
+                    red_guesser_connection = GPTConnection(agent)
+                    red_guesser = User(red_guesser_connection)
+                    red_guesser.is_spy_master = False
+                    red_guesser.team = "red"
+                    red_guesser.name = "Red Guesser"
+                    red_guesser.is_ready = True
+
+                    blue_spy_master_connection = GPTConnection(agent)
+                    blue_spy_master = User(blue_spy_master_connection)
+                    blue_spy_master.is_spy_master = True
+                    blue_spy_master.team = "blue"
+                    blue_spy_master.name = "Blue Spy Master"
+                    blue_spy_master.is_ready = True
+
+                    blue_guesser_connection = GPTConnection(agent)
+                    blue_guesser = User(blue_guesser_connection)
+                    blue_guesser.is_spy_master = False
+                    blue_guesser.team = "blue"
+                    blue_guesser.name = "Blue Guesser"
+                    blue_guesser.is_ready = True
+
+                    self.game = CodenamesGame(self.users + [red_guesser, blue_spy_master, blue_guesser])
+                    for user in [red_guesser, blue_spy_master, blue_guesser]:
+                        user.connection.set_end_point(self.game)
                     for user in self.users:
                         user.in_game = True
                 await self.send_all({

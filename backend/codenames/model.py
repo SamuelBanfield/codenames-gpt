@@ -1,3 +1,4 @@
+import asyncio
 import json
 import pathlib
 import random
@@ -12,7 +13,7 @@ class CodenamesConnection:
     def __init__(self):
         self.uuid = uuid.uuid4()
 
-    def send(self, message):
+    async def send(self, message):
         raise NotImplementedError("Subclasses must implement this method")
 
 class User:
@@ -27,7 +28,7 @@ class User:
 
     async def send(self, message):
         print(f"Sending message to {self.name}: {message["serverMessageType"]}")
-        await self.connection.send(json.dumps(message))
+        await self.connection.send(message)
 
     def __json__(self):
         return {
@@ -83,14 +84,8 @@ class CodenamesGame:
         self.guesses_remaining = 0
         self.clue = None # Tuple of (word, number)
 
-    async def send_game_message_to_all(self, message):
-        print(f"Sending game message to all: {message["serverMessageType"]}")
-        for user in self.users:
-            await user.connection.send(json.dumps(message))
-
-    async def _broadcast_state_update(self):
-        for user in self.users:
-            await user.send({
+    async def _broadcast_state_update(self, is_on_turn_update):
+        await asyncio.gather(*(user.send({
                 "serverMessageType": "stateUpdate",
                 "tiles": [
                     tile.get_json(user.is_spy_master) for tile in self._tiles
@@ -98,8 +93,9 @@ class CodenamesGame:
                 "players": [user.__json__() for user in self.users],
                 "onTurnRole": self.current_turn,
                 "guessesRemaining": self.guesses_remaining,
-                "clue": {"word": self.clue[0], "number": self.clue[1]} if self.clue else None
-            })
+                "clue": {"word": self.clue[0], "number": self.clue[1]} if self.clue else None,
+                "new_turn": is_on_turn_update
+            }) for user in self.users))
 
     async def guess_tile(self, user: User, tile):
         if self.current_turn == ROLES.index((user.team, user.is_spy_master)) and not user.is_spy_master:
@@ -109,12 +105,13 @@ class CodenamesGame:
                 self.guesses_remaining = 0
             elif tile.team == user.team:
                 self.guesses_remaining -= 1
+
             else:
                 self.guesses_remaining = 0
             if self.guesses_remaining <= 0:
                 self.current_turn = ROLES.index(("red" if user.team == "blue" else "blue", True))
                 self.clue = None
-            await self._broadcast_state_update()
+            await self._broadcast_state_update(self.guesses_remaining <= 0)
         else:
             print(f"Ignoring guess from {user.name} as it is not their turn")
 
@@ -123,7 +120,7 @@ class CodenamesGame:
             self.clue = (word, number)
             self.guesses_remaining = number
             self.current_turn = ROLES.index((user.team, False))
-            await self._broadcast_state_update()
+            await self._broadcast_state_update(True)
         else:
             print(f"Ignoring clue from {user.name} as it is not their turn")
 
@@ -133,10 +130,16 @@ class CodenamesGame:
         
         match message["clientMessageType"]:
             case "initialiseRequest":
-                await self._broadcast_state_update()
+                await self._broadcast_state_update(False)
             case "guessTile":
                 await self.guess_tile(user, _get_tile_by_word(message["word"], self._tiles))
             case "provideClue":
                 await self.provide_clue(user, message["word"], message["number"])
             case _:
                 raise Exception("Unknown request type")
+            
+    def get_user_by_connection(self, connection: CodenamesConnection):
+        for user in self.users:
+            if user.connection == connection:
+                return user
+        raise Exception(f"No user found for connection {connection}")

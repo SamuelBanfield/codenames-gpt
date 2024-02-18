@@ -31,7 +31,7 @@ class CodenamesWebsocketConnection(CodenamesConnection):
     @override
     async def send(self, message):
         # print(f"Sending message to client: {message}")
-        await self.socket.send(message)
+        await self.socket.send(json.dumps(message))
 
 LOBBY = Lobby()
 
@@ -47,7 +47,7 @@ async def handle_websocket(websocket, path):
             json_message = json.loads(message)
             if "clientMessageType" in json_message and json_message["clientMessageType"] == "idRequest":
                 # Silently send id to user
-                to_send = json.dumps({"serverMessageType": "idAssign", "uuid": str(connection.uuid)})
+                to_send = {"serverMessageType": "idAssign", "uuid": str(connection.uuid)}
                 print(f"Sending message: {to_send}")
                 await connection.send(to_send)
             else:
