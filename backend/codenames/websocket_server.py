@@ -1,26 +1,12 @@
 import asyncio
 import json
-import pathlib
 import traceback
 from typing import override
 import websockets
 
 from codenames.lobby import Lobby
 from codenames.model import CodenamesConnection, User
-
-# import logging
-# logging.basicConfig(level=logging.INFO)
-
-properties_file_path = pathlib.Path(__file__).parent.parent / ".properties.json"
-
-try:
-    with open(properties_file_path) as property_file:
-        properties = json.load(property_file)
-except FileNotFoundError as e:
-    raise FileNotFoundError(f"Could not find .properties.json file: {e}")
-
-HOST = properties["host"]
-PORT = properties["websocketPort"]
+from codenames.options import HOST, WEBSOCKET_PORT
 
 class CodenamesWebsocketConnection(CodenamesConnection):
 
@@ -61,8 +47,8 @@ async def handle_websocket(websocket, path):
         print(f"Connection for user {user.connection.uuid} closed")
 
 async def main():
-    async with websockets.serve(handle_websocket, HOST, PORT):
-        print(f"Server started on {HOST}:{PORT}")
+    async with websockets.serve(handle_websocket, HOST, WEBSOCKET_PORT):
+        print(f"Server started on {HOST}:{WEBSOCKET_PORT}")
         await asyncio.Future()
 
 if __name__ == "__main__":

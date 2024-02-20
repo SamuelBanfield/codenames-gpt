@@ -50,38 +50,38 @@ class Lobby:
                     user.name = player_data["name"] if "name" in player_data else user.name
                     user.is_ready = player_data["ready"] if "ready" in player_data else user.is_ready
                     if "role" in player_data and player_data["role"] is not None:
-                        user.team, user.is_spy_master = ROLES[int(player_data["role"])]
+                        index = int(player_data["role"])
+                        assigned_roles = self.get_role_assignments()
+                        if index not in assigned_roles:
+                            user.team, user.is_spy_master = ROLES[index]
                 if self.all_ready():
-                    agent = GPTAgent()
                     
-                    red_guesser_connection = GPTConnection(agent)
-                    red_guesser = User(red_guesser_connection)
-                    red_guesser.is_spy_master = False
-                    red_guesser.team = "red"
-                    red_guesser.name = "Red Guesser"
-                    red_guesser.is_ready = True
+                    gpt_players = [] # Players controlled by chat gpt
+                    role_assignements = self.get_role_assignments()
+                    agent = GPTAgent()
+                    for index, (team, is_spy_master) in enumerate(ROLES):
+                        if not index in role_assignements:
+                            gpt_connection = GPTConnection(agent)
+                            gpt_player = User(gpt_connection)
+                            gpt_player.is_spy_master = is_spy_master
+                            gpt_player.team = team
+                            gpt_player.name = f"{"GPT Spy Master" if is_spy_master else "GPT Guesser"} ({team})"
+                            gpt_player.is_ready = True
+                            gpt_players.append(gpt_player)
 
-                    blue_spy_master_connection = GPTConnection(agent)
-                    blue_spy_master = User(blue_spy_master_connection)
-                    blue_spy_master.is_spy_master = True
-                    blue_spy_master.team = "blue"
-                    blue_spy_master.name = "Blue Spy Master"
-                    blue_spy_master.is_ready = True
-
-                    blue_guesser_connection = GPTConnection(agent)
-                    blue_guesser = User(blue_guesser_connection)
-                    blue_guesser.is_spy_master = False
-                    blue_guesser.team = "blue"
-                    blue_guesser.name = "Blue Guesser"
-                    blue_guesser.is_ready = True
-
-                    self.game = CodenamesGame(self.users + [red_guesser, blue_spy_master, blue_guesser])
-                    for user in [red_guesser, blue_spy_master, blue_guesser]:
+                    self.game = CodenamesGame(self.users + gpt_players)
+                    for user in gpt_players:
                         user.connection.set_end_point(self.game)
                     for user in self.users:
                         user.in_game = True
-                await self.send_all({
-                    "serverMessageType": "playerUpdate",
-                    "players": [user.__json__() for user in self.users]
-                })
+                    await self.send_all({
+                        "serverMessageType": "playerUpdate",
+                        "players": [user.__json__() for user in self.users]
+                    })
+                    await self.game._broadcast_state_update(True)
+                else:
+                    await self.send_all({
+                        "serverMessageType": "playerUpdate",
+                        "players": [user.__json__() for user in self.users]
+                    })
             

@@ -71,7 +71,7 @@ def _generate_tiles():
 
 def _get_tile_by_word(word, tiles):
     for tile in tiles:
-        if tile.word == word:
+        if tile.word.replace(" ", "").lower() == word.replace(" ", "").lower():
             return tile
     raise Exception(f"No tile found for word {word}")
 
@@ -83,6 +83,7 @@ class CodenamesGame:
         self.current_turn = 0 # Index in ROLES on turn role
         self.guesses_remaining = 0
         self.clue = None # Tuple of (word, number)
+        
 
     async def _broadcast_state_update(self, is_on_turn_update):
         await asyncio.gather(*(user.send({
@@ -93,7 +94,7 @@ class CodenamesGame:
                 "players": [user.__json__() for user in self.users],
                 "onTurnRole": self.current_turn,
                 "guessesRemaining": self.guesses_remaining,
-                "clue": {"word": self.clue[0], "number": self.clue[1]} if self.clue else None,
+                "clue": {"word": self.clue[0].upper(), "number": self.clue[1]} if self.clue else None,
                 "new_turn": is_on_turn_update
             }) for user in self.users))
 
@@ -137,6 +138,15 @@ class CodenamesGame:
                 await self.provide_clue(user, message["word"], message["number"])
             case _:
                 raise Exception("Unknown request type")
+            
+    async def pass_turn(self, user: User):
+        if self.current_turn == ROLES.index((user.team, user.is_spy_master)) and not user.is_spy_master:
+            self.guesses_remaining = 0
+            self.current_turn = ROLES.index(("red" if user.team == "blue" else "blue", True))
+            self.clue = None
+            await self._broadcast_state_update(self.guesses_remaining <= 0)
+        else:
+            print(f"Ignoring guess from {user.name} as it is not their turn")
             
     def get_user_by_connection(self, connection: CodenamesConnection):
         for user in self.users:
