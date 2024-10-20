@@ -1,6 +1,7 @@
+import time
 import openai
 
-from codenames.options import OPEN_AI_KEY, GPT_MODEL
+from codenames.options import OPEN_AI_KEY, GPT_MODEL, VERBOSE_LOGGING
 
 class GPTAgent:
 
@@ -10,13 +11,15 @@ class GPTAgent:
         )
 
     def get_clue(self, words_to_guess, words_to_avoid):
-        print(f"Getting clue from GPT to link {words_to_guess}")
+        if VERBOSE_LOGGING:
+            print(f"Getting clue from GPT to link {words_to_guess}")
+        start = time.time()
         response = self.client.chat.completions.create(
             model=GPT_MODEL,
             messages=[
                 {
                     "role": "system",
-                    "content": "You are playing codenames and it's you turn to give a clue. Return the clue, followed by the number of words it links to, e.g: CLUE,3. Make sure that your clue links only to your teams words, and not to words from the other team. The clue doesn't need to link to all of your teams words."
+                    "content": "You are playing codenames and it's you turn to give a clue. Return the clue, followed by the number of words it links to, e.g: CLUE,3. It is VERY IMPORTANT you say ONLY the clue word, followed by a comma, and then the number of words it links to as a digit, e.g. CLUE,2 or GREEN,4"
                 },
                 {
                     "role": "user",
@@ -24,6 +27,7 @@ class GPTAgent:
                 },
             ]
         )
+        print(f"GPT response time: {time.time() - start}")
 
         if response.choices[0].finish_reason != "stop":
             print(f"Failed to get response from chat gpt: {response.choices[0].finish_reason}")
@@ -43,8 +47,6 @@ class GPTAgent:
 
     def guess(self, clue, words):
         print(f"GPT guessing for clue {clue}")
-        prompt = f"The words are [{','.join(words)}] and the clue word is '{clue[0]}' and you must guess {clue[1]} words"
-        print(prompt)
         response = self.client.chat.completions.create(
             model=GPT_MODEL,
             messages=[
@@ -63,7 +65,8 @@ class GPTAgent:
 
         guess = response.choices[0].message.content
         
-        print(f"GPT guessed: {guess}")
+        if VERBOSE_LOGGING:
+            print(f"GPT guessed: {guess}")
         assumed_guesses = [word.strip() for word in guess.split(',')]
         lowered = [word.replace(" ", "").lower() for word in words]
         

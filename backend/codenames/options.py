@@ -14,4 +14,5 @@ HOST = _properties["host"]
 WEBSOCKET_PORT = _properties["websocketPort"]
 OPEN_AI_KEY = _properties["openaiKey"]
 GPT_MODEL = _properties["gptModel"]
-GUESS_DELAY = _properties["guessDelay"] if "guessDelay" in _properties else 0 # Optional delay so you can see whats happening
+GUESS_DELAY = _properties["guessDelay"] if "guessDelay" in _properties else 0 # Optional GPT delay to see whats happening
+VERBOSE_LOGGING = "verboseLogging" in _properties and _properties["verboseLogging"]

@@ -25,7 +25,7 @@ class Lobby:
         return all(user.is_ready for user in self.users if user.name != None and user.name != "")
     
     async def send_all(self, message):
-        print(f"Sending message to all: {message["serverMessageType"]}")
+        print(f"Sending message to all: {message['serverMessageType']}")
         for user in self.users:
             await user.connection.send(message)
 
@@ -65,7 +65,7 @@ class Lobby:
                             gpt_player = User(gpt_connection)
                             gpt_player.is_spy_master = is_spy_master
                             gpt_player.team = team
-                            gpt_player.name = f"{"GPT Spy Master" if is_spy_master else "GPT Guesser"} ({team})"
+                            gpt_player.name = f"{'GPT Spy Master' if is_spy_master else 'GPT Guesser'} ({team})"
                             gpt_player.is_ready = True
                             gpt_players.append(gpt_player)
 

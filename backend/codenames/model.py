@@ -2,11 +2,17 @@ import asyncio
 import json
 import pathlib
 import random
-from typing import List
 import uuid
+from typing import List, Literal, Optional
+
+from codenames.options import VERBOSE_LOGGING
 
 # Yuck
 ROLES = [("red", True), ("blue", True), ("red", False), ("blue", False)]
+
+class CodenamesGameResult:
+    RED_WIN = "red"
+    BLUE_WIN = "blue"
 
 class CodenamesConnection:
 
@@ -27,7 +33,8 @@ class User:
         self.team = None
 
     async def send(self, message):
-        print(f"Sending message to {self.name}: {message["serverMessageType"]}")
+        if VERBOSE_LOGGING:
+            print(f"Sending message to {self.name}: {message['serverMessageType']}")
         await self.connection.send(message)
 
     def __json__(self):
@@ -69,7 +76,7 @@ def _generate_tiles():
     random.shuffle(all_words)
     return all_words
 
-def _get_tile_by_word(word, tiles):
+def get_tile_by_word(word, tiles):
     for tile in tiles:
         if tile.word.replace(" ", "").lower() == word.replace(" ", "").lower():
             return tile
@@ -83,7 +90,6 @@ class CodenamesGame:
         self.current_turn = 0 # Index in ROLES on turn role
         self.guesses_remaining = 0
         self.clue = None # Tuple of (word, number)
-        
 
     async def _broadcast_state_update(self, is_on_turn_update):
         await asyncio.gather(*(user.send({
@@ -97,16 +103,25 @@ class CodenamesGame:
                 "clue": {"word": self.clue[0].upper(), "number": self.clue[1]} if self.clue else None,
                 "new_turn": is_on_turn_update
             }) for user in self.users))
+        
+    def check_win(self) -> Optional[Literal["red", "blue"]]:
+        if not [tile for tile in self._tiles if tile.team == "red" and not tile.revealed]:
+            return "red"
+        if not [tile for tile in self._tiles if tile.team == "blue" and not tile.revealed]:
+            return "blue"
+        if [tile for tile in self._tiles if tile.team == "assassin" and tile.revealed]:
+            return "red" if ROLES[self.current_turn][0] == "blue" else "blue"
 
-    async def guess_tile(self, user: User, tile):
+    async def guess_tile(self, user: User, tile) -> Optional[Literal["red", "blue"]]:
         if self.current_turn == ROLES.index((user.team, user.is_spy_master)) and not user.is_spy_master:
             tile.reveal()
+            if winner := self.check_win():
+                return winner
             if tile.team == "assassin":
                 # Lose the game
                 self.guesses_remaining = 0
             elif tile.team == user.team:
                 self.guesses_remaining -= 1
-
             else:
                 self.guesses_remaining = 0
             if self.guesses_remaining <= 0:
@@ -121,7 +136,8 @@ class CodenamesGame:
             self.clue = (word, number)
             self.guesses_remaining = number
             self.current_turn = ROLES.index((user.team, False))
-            await self._broadcast_state_update(True)
+            await self._broadcast_state_update(True) 
+            return self.clue
         else:
             print(f"Ignoring clue from {user.name} as it is not their turn")
 
@@ -133,7 +149,7 @@ class CodenamesGame:
             case "initialiseRequest":
                 await self._broadcast_state_update(False)
             case "guessTile":
-                await self.guess_tile(user, _get_tile_by_word(message["word"], self._tiles))
+                await self.guess_tile(user, get_tile_by_word(message["word"], self._tiles))
             case "provideClue":
                 await self.provide_clue(user, message["word"], message["number"])
             case _:
@@ -145,8 +161,6 @@ class CodenamesGame:
             self.current_turn = ROLES.index(("red" if user.team == "blue" else "blue", True))
             self.clue = None
             await self._broadcast_state_update(self.guesses_remaining <= 0)
-        else:
-            print(f"Ignoring guess from {user.name} as it is not their turn")
             
     def get_user_by_connection(self, connection: CodenamesConnection):
         for user in self.users:
