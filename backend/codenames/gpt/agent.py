@@ -1,75 +1,84 @@
 import time
 import openai
+import logging
+from typing import List, Tuple
 
 from codenames.options import OPEN_AI_KEY, GPT_MODEL, VERBOSE_LOGGING
 
+SYSTEM_PROMPT_CLUE = (
+    "You are playing codenames and it's your turn to give a clue. "
+    "Return the clue, followed by the number of words it links to, e.g: CLUE,3. "
+    "It is VERY IMPORTANT you say ONLY the clue word, followed by a comma, and then the number of words it links to as a digit, e.g. CLUE,2 or GREEN,4"
+)
+SYSTEM_PROMPT_GUESS = (
+    "You are playing codenames and it's your turn to guess a word. "
+    "Return the words you think are most closely linked to the clue provided separated by commas on a single line e.g: WORD1,WORD2,WORD3"
+)
+
+logging.basicConfig(level=logging.DEBUG if VERBOSE_LOGGING else logging.INFO)
+
 class GPTAgent:
-
     def __init__(self):
-        self.client = openai.OpenAI(
-            api_key=OPEN_AI_KEY,
-        )
+        self.client = openai.OpenAI(api_key=OPEN_AI_KEY)
 
-    def get_clue(self, words_to_guess, words_to_avoid):
-        if VERBOSE_LOGGING:
-            print(f"Getting clue from GPT to link {words_to_guess}")
+    def get_clue(self, words_to_guess: List[str], words_to_avoid: List[str]) -> Tuple[str, int]:
+        logging.debug(f"Getting clue from GPT to link {words_to_guess}")
         start = time.time()
-        response = self.client.chat.completions.create(
-            model=GPT_MODEL,
-            messages=[
-                {
-                    "role": "system",
-                    "content": "You are playing codenames and it's you turn to give a clue. Return the clue, followed by the number of words it links to, e.g: CLUE,3. It is VERY IMPORTANT you say ONLY the clue word, followed by a comma, and then the number of words it links to as a digit, e.g. CLUE,2 or GREEN,4"
-                },
-                {
-                    "role": "user",
-                    "content": f"Your teams words that you must link are [{','.join(words_to_guess)}] and the other teams words that you MUST NOT link to are [{','.join(words_to_avoid)}]"
-                },
-            ]
+        response = self._get_gpt_response(
+            SYSTEM_PROMPT_CLUE,
+            f"Your team's words that you must link are [{','.join(words_to_guess)}] and the other team's words that you MUST NOT link to are [{','.join(words_to_avoid)}]"
         )
-        print(f"GPT response time: {time.time() - start}")
+        logging.debug(f"GPT response time: {time.time() - start}")
 
         if response.choices[0].finish_reason != "stop":
-            print(f"Failed to get response from chat gpt: {response.choices[0].finish_reason}")
+            logging.error(f"Failed to get response from chat GPT: {response.choices[0].finish_reason}")
+            return "", 0
 
-        print(f"GPT clue: {response.choices[0].message.content}")
+        clue, number = self._parse_clue_response(response.choices[0].message.content)
+        logging.debug(f"GPT clue: {clue}, {number}")
+        return clue, number
 
-        raw_word, raw_number = response.choices[0].message.content.split(",")
-        cleaned_number = ""
-        for char in raw_number:
-            if char in "0987654321":
-                cleaned_number += char
-        cleaned_word = ""
-        for char in raw_word:
-            if char.lower() in "abcdefghijklmnopqrstuvwxyz":
-                cleaned_word += char.upper()
-        return cleaned_word.upper(), int(cleaned_number)
-
-    def guess(self, clue, words):
-        print(f"GPT guessing for clue {clue}")
-        response = self.client.chat.completions.create(
-            model=GPT_MODEL,
-            messages=[
-                {
-                    "role": "system",
-                    "content": "You are playing codenames and it's you turn to guess a word. Return the words you think are most closely linked to the clue provided separated by commas on a single line e.g: WORD1,WORD2,WORD3"
-                },
-                {
-                    "role": "user",
-                    "content": f"The possible words are [{','.join(words)}], you must choose the {clue[1]} words from the list I have given you the link most closely to '{clue[0]}'. Make sure your guesses are from the list [{','.join(words)}], and all link to the clue '{clue[0]}'"
-                },
-            ]
+    def guess(self, clue: Tuple[str, int], words: List[str]) -> List[str]:
+        logging.debug(f"GPT guessing for clue {clue}")
+        response = self._get_gpt_response(
+            SYSTEM_PROMPT_GUESS,
+            f"The possible words are [{','.join(words)}], you must choose the {clue[1]} words from the list I have given you that link most closely to '{clue[0]}'. Make sure your guesses are from the list [{','.join(words)}], and all link to the clue '{clue[0]}'"
         )
-        if response.choices[0].finish_reason != "stop":
-            print(f"Failed to get response from chat gpt: {response.choices[0].finish_reason}")
 
-        guess = response.choices[0].message.content
-        
-        if VERBOSE_LOGGING:
-            print(f"GPT guessed: {guess}")
-        assumed_guesses = [word.strip() for word in guess.split(',')]
+        if response.choices[0].finish_reason != "stop":
+            logging.error(f"Failed to get response from chat GPT: {response.choices[0].finish_reason}")
+            return []
+
+        guesses = self._parse_guess_response(response.choices[0].message.content, words, clue[1])
+        logging.debug(f"GPT guessed: {guesses}")
+        return guesses
+
+    def _get_gpt_response(self, system_prompt: str, user_prompt: str):
+        try:
+            return self.client.chat.completions.create(
+                model=GPT_MODEL,
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_prompt},
+                ]
+            )
+        except Exception as e:
+            logging.error(f"Error getting GPT response: {e}")
+            raise
+
+    def _parse_clue_response(self, content: str) -> Tuple[str, int]:
+        try:
+            raw_word, raw_number = content.split(",")
+            cleaned_word = ''.join(char.upper() for char in raw_word if char.isalpha())
+            cleaned_number = int(''.join(char for char in raw_number if char.isdigit()))
+            return cleaned_word, cleaned_number
+        except ValueError as e:
+            logging.error(f"Error parsing clue response: {e}")
+            return "", 0
+
+    def _parse_guess_response(self, content: str, words: List[str], num_guesses: int) -> List[str]:
+        assumed_guesses = [word.strip() for word in content.split(',')]
         lowered = [word.replace(" ", "").lower() for word in words]
-        
-        allowed_guesses = [word for word in assumed_guesses if word.replace(" ", "").lower() in lowered][:int(clue[1])]
-        print(f"Intepreted as guessing: {allowed_guesses}")
+        allowed_guesses = [word for word in assumed_guesses if word.replace(" ", "").lower() in lowered][:num_guesses]
+        logging.debug(f"Interpreted as guessing: {allowed_guesses}")
         return allowed_guesses
