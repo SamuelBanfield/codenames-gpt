@@ -21,6 +21,7 @@ export default function Home() {
   );
 
   const [websocket, setWebsocket] = useState<WebSocket>(initial);
+  const [connectionFailed, setConnectionFailed] = useState(false);
 
   const handleIdMessage = (event: MessageEvent) => {
     const data = JSON.parse(event.data);
@@ -40,17 +41,22 @@ export default function Home() {
     }
     else {
       websocket.onopen = () => websocket.send(JSON.stringify({ clientMessageType: "idRequest" }));
+      websocket.onerror = (event) => {
+        console.error("Connection failed", event);
+        setConnectionFailed(true);
+      }
     }
     }, []
   );
 
 
   return (
-    websocket.readyState === websocket.CONNECTING ? <div>Connecting...</div> :
-      player.uuid && <div>
-        {!player.inGame ? <Lobby websocket={websocket} player={player} setPlayer={setPlayer} />
-                : <GameComponent websocket={websocket} player={player} />}
-      </div>
+    connectionFailed ? <div>Connection failed</div> :
+      websocket.readyState === websocket.CONNECTING ? <div>Connecting...</div> :
+        player.uuid && <div>
+          {!player.inGame ? <Lobby websocket={websocket} player={player} setPlayer={setPlayer} />
+                  : <GameComponent websocket={websocket} player={player} />}
+        </div>
   );
 }
 
