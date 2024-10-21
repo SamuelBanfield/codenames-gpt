@@ -47,7 +47,7 @@ class User:
             "role": self.get_role_index()
         }
 
-    def get_role_index(self) -> Optional[int]:
+    def get_role_index(self) -> Optional[Role]:
         if self.team is not None:
             return [role.value for role in Role].index((self.team, self.is_spy_master))
         return None
@@ -90,7 +90,7 @@ class CodenamesGame:
     def __init__(self, users: List[User]):
         self.users = users
         self.tiles = generate_tiles()
-        self.current_turn = 0
+        self.current_turn: Role = Role.RED_SPYMASTER
         self.guesses_remaining = 0
         self.clue: Optional[Tuple[str, int]] = None
 
@@ -102,10 +102,11 @@ class CodenamesGame:
             "serverMessageType": "stateUpdate",
             "tiles": [tile.to_json(user.is_spy_master) for tile in self.tiles],
             "players": [u.to_json() for u in self.users],
-            "onTurnRole": self.current_turn,
+            "onTurnRole": [role for role in Role].index(self.current_turn),
             "guessesRemaining": self.guesses_remaining,
             "clue": {"word": self.clue[0].upper(), "number": self.clue[1]} if self.clue else None,
-            "new_turn": is_on_turn_update
+            "new_turn": is_on_turn_update,
+            "winner": self.check_win()
         }
 
     def check_win(self) -> Optional[Literal["red", "blue"]]:
@@ -114,7 +115,7 @@ class CodenamesGame:
         if not any(tile.team == "blue" and not tile.revealed for tile in self.tiles):
             return "blue"
         if any(tile.team == "assassin" and tile.revealed for tile in self.tiles):
-            return "red" if Role(self.current_turn).value[0] == "blue" else "blue"
+            return "red" if self.current_turn.value[0] == "blue" else "blue"
         return None
 
     async def guess_tile(self, user: User, tile: Tile) -> Optional[Literal["red", "blue"]]:
@@ -129,7 +130,7 @@ class CodenamesGame:
             print(f"Ignoring guess from {user.name} as it is not their turn")
 
     def is_user_turn(self, user: User) -> bool:
-        return self.current_turn == [role.value for role in Role].index((user.team, user.is_spy_master))
+        return self.current_turn.value == (user.team, user.is_spy_master)
 
     def update_guesses_remaining(self, tile: Tile, user: User):
         if tile.team == "assassin":
@@ -139,14 +140,14 @@ class CodenamesGame:
         else:
             self.guesses_remaining = 0
         if self.guesses_remaining <= 0:
-            self.current_turn = [role.value for role in Role].index(("red" if user.team == "blue" else "blue", True))
+            self.current_turn = Role(("red" if user.team == "blue" else "blue", True))
             self.clue = None
 
     async def provide_clue(self, user: User, word: str, number: int):
         if self.is_user_turn(user) and user.is_spy_master:
             self.clue = (word, number)
             self.guesses_remaining = number
-            self.current_turn = [role.value for role in Role].index((user.team, False))
+            self.current_turn = Role((user.team, False))
             await self.broadcast_state_update(True)
         else:
             print(f"Ignoring clue from {user.name} as it is not their turn")
@@ -168,7 +169,7 @@ class CodenamesGame:
     async def pass_turn(self, user: User):
         if self.is_user_turn(user) and not user.is_spy_master:
             self.guesses_remaining = 0
-            self.current_turn = [role.value for role in Role].index(("red" if user.team == "blue" else "blue", True))
+            self.current_turn = Role(("red" if user.team == "blue" else "blue", True))
             self.clue = None
             await self.broadcast_state_update(True)
 

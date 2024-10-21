@@ -44,6 +44,8 @@ export default function GameComponent(gameProps: { websocket: WebSocket, player:
 
     const [onTurnRole, setOnTurnRole] = useState<Role | null>(null);
     const [guessesRemaining, setGuessesRemaining] = useState<number | null>(null);
+
+    const [winner, setWinner] = useState<string | null>(null);
   
     const handleMessage = (event: MessageEvent) => {
       console.log("message", event.data);
@@ -55,6 +57,9 @@ export default function GameComponent(gameProps: { websocket: WebSocket, player:
           setOnTurnRole(data.onTurnRole);
           if (data.guessesRemaining !== undefined) {
             setGuessesRemaining(data.guessesRemaining);
+          }
+          if (data.winner !== undefined) {
+            setWinner(data.winner);
           }
           break;
         case "tilesUpdate":
@@ -84,21 +89,7 @@ export default function GameComponent(gameProps: { websocket: WebSocket, player:
     }, []);
   
     return (
-      <main className="flex min-h-screen flex-col items-center p-24">
-        <div className="flex flex-col items-center h-40">
-          {codenamesClue?.word && <h1 className="text-2xl font-bold mb-4">{codenamesClue?.word}, {codenamesClue?.number}</h1>}
-          <p className="mb-4">{
-            player.role === onTurnRole 
-              ? "It's your turn" + ((player.role === Role.redSpymaster || player.role === Role.blueSpymaster)
-                ? ", enter a clue"
-                : ", click on the word to guess")
-              : (onTurnRole ? roleTurnToDisplayMap[onTurnRole] : "")}
-              </p>
-          <p className="mb-4">Guesses remaining: {guessesRemaining}</p>
-          <p className="mb-4">
-              You are on team {((player.role == Role.redSpymaster) || (player.role == Role.redPlayer)) ? "Red" : "Blue"}
-          </p>
-        </div>
+      <main className="flex min-h-screen flex-col items-center p-12">
         <div className="grid grid-cols-5 gap-4">
           {codenamesTiles.map((tile: CodenamesTile, index: number) => (
             <div
@@ -113,6 +104,25 @@ export default function GameComponent(gameProps: { websocket: WebSocket, player:
               {tile.word}
             </div>
           ))}
+        </div>
+        <div className="flex flex-col items-center h-50">
+          {winner === null && <div className="flex flex-col items-center">
+            {codenamesClue?.word && <h1 className="text-2xl font-bold mb-4">{codenamesClue?.word}, {codenamesClue?.number}</h1>}
+            <p className="mb-4">{
+              player.role === onTurnRole 
+                ? "It's your turn" + ((player.role === Role.redSpymaster || player.role === Role.blueSpymaster)
+                  ? ", enter a clue"
+                  : ", click on the word to guess")
+                : (onTurnRole ? roleTurnToDisplayMap[onTurnRole] : "")}
+                </p>
+            <p className="mb-4">Guesses remaining: {guessesRemaining}</p>
+            <p className="mb-4">
+                You are on team {((player.role == Role.redSpymaster) || (player.role == Role.redPlayer)) ? "Red" : "Blue"}
+            </p>
+          </div>
+          }
+          {(winner !== null) && <h1>Game over, the {winner} team has won</h1>
+          }
         </div>
         <div className="mt-8">
           {player.role === onTurnRole && (player.role === Role.redSpymaster || player.role === Role.blueSpymaster) && (

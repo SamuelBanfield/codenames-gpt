@@ -16,13 +16,14 @@ class GPTConnection(CodenamesConnection):
         self.user = end_point.get_user_by_connection(self)
 
     async def send(self, message: dict):
-        if message["serverMessageType"] == "stateUpdate" and message["new_turn"]:
-            role = [role.value for role in Role][message["onTurnRole"]]
-            if role[0] == self.user.team and role[1] == self.user.is_spy_master:
-                if self.user.is_spy_master:
-                    await self._provide_clue()
-                else:
-                    await self._make_guesses()
+        if message["serverMessageType"] == "stateUpdate":
+            if message["new_turn"] and message["winner"] is None:
+                role = [role.value for role in Role][message["onTurnRole"]]
+                if role[0] == self.user.team and role[1] == self.user.is_spy_master:
+                    if self.user.is_spy_master:
+                        await self._provide_clue()
+                    else:
+                        await self._make_guesses()
 
     async def _provide_clue(self):
         print("GPT is providing clue")
