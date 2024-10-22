@@ -121,9 +121,6 @@ class CodenamesGame:
     async def guess_tile(self, user: User, tile: Tile) -> Optional[Literal["red", "blue"]]:
         if self.is_user_turn(user) and not user.is_spy_master:
             tile.reveal()
-            winner = self.check_win()
-            if winner:
-                return winner
             self.update_guesses_remaining(tile, user)
             await self.broadcast_state_update(self.guesses_remaining <= 0)
         else:
@@ -155,6 +152,10 @@ class CodenamesGame:
     async def handle_request(self, user: User, message: dict):
         if "clientMessageType" not in message:
             raise ValueError("No message type specified")
+        
+        if self.check_win():
+            print("Game is over, ignoring request")
+            return
 
         match message["clientMessageType"]:
             case "initialiseRequest":
