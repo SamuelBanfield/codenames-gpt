@@ -4,26 +4,26 @@ import { useEffect, useState } from "react";
 import { Player, Role } from "./lobby";
 
 const notRevealedColourMap = {
-    "red": "bg-red-200",
-    "blue": "bg-blue-200",
-    "assassin": "bg-gray-400",
-    "neutral": "bg-yellow-100",
-    "unknown": "bg-gray-200"
+  "red": "bg-red-200",
+  "blue": "bg-blue-200",
+  "assassin": "bg-gray-400",
+  "neutral": "bg-yellow-100",
+  "unknown": "bg-gray-200"
 }
 
 const revealedColourMap = {
-    "red": "bg-red-500",
-    "blue": "bg-blue-500",
-    "assassin": "bg-gray-800",
-    "neutral": "bg-yellow-500",
-    "unknown": "bg-gray-200"
+  "red": "bg-red-500",
+  "blue": "bg-blue-500",
+  "assassin": "bg-gray-800",
+  "neutral": "bg-yellow-500",
+  "unknown": "bg-gray-200"
 }
 
 const roleTurnToDisplayMap = {
-    0: "The Red spymaster is thinking of a clue",
-    1: "The Blue spymaster is thinking of a clue",
-    2: "The Red team are guessing",
-    3: "The Blue team are guessing"
+  0: "The Red spymaster is thinking of a clue",
+  1: "The Blue spymaster is thinking of a clue",
+  2: "The Red team are guessing",
+  3: "The Blue team are guessing"
 }
 
 const getTileColour = (tile: CodenamesTile): string => {
@@ -69,7 +69,7 @@ export default function GameComponent(gameProps: { websocket: WebSocket, player:
           setCodenamesClue(data.clue);
           break;
         default:
-          console.log("Unknown message type for message", data);
+          console.log("Unknown message type while in game", data);
       }
     };
   

@@ -1,10 +1,11 @@
 "use client";
 
 import { useEffect, useState } from "react"
-import GameComponent from "./_components/game_component";
+import GameComponent from "./_components/gameComponent";
 import Lobby, { Player } from "./_components/lobby";
 
 import options from "../.properties.json";
+import LobbySelect from "./_components/lobbySelect";
 
 const initial = new WebSocket(`ws://${options.host}:${options.websocketPort}/`);
 
@@ -16,7 +17,8 @@ export default function Home() {
       uuid: null,
       role: null,
       ready: false,
-      inGame: false
+      inGame: false,
+      inLobby: false
     }
   );
 
@@ -49,14 +51,26 @@ export default function Home() {
     }, []
   );
 
+  console.log("player", player);
+
+  if (websocket.readyState === websocket.CONNECTING || player.uuid === null) {
+    return <div>Connecting...</div>;
+  }
+
+  if (connectionFailed) {
+    return <div>Connection failed</div>;
+  }
+  
+  if (player.inGame) {
+    return <GameComponent websocket={websocket} player={player} />;
+  }
+
+  if (player.inLobby) {
+    return <Lobby websocket={websocket} player={player} setPlayer={setPlayer} />;
+  }
 
   return (
-    connectionFailed ? <div>Connection failed</div> :
-      websocket.readyState === websocket.CONNECTING ? <div>Connecting...</div> :
-        player.uuid && <div>
-          {!player.inGame ? <Lobby websocket={websocket} player={player} setPlayer={setPlayer} />
-                  : <GameComponent websocket={websocket} player={player} />}
-        </div>
+    <LobbySelect websocket={websocket} player={player} setPlayer={setPlayer} />
   );
 }
 

@@ -15,10 +15,11 @@ export type Player = {
     uuid: string | null;
     ready: boolean;
     inGame: boolean;
+    inLobby: boolean;
     role: Role | null;
 };
 
-export default function Lobby(lobbyProps: { websocket: WebSocket, player: Player, setPlayer: any }) {
+export default function Lobby(lobbyProps: { websocket: WebSocket, player: Player, setPlayer: (player: Player) => void }) {
         
     const {websocket, player, setPlayer} = lobbyProps;
     const [nameConfirmed, setNameConfirmed] = useState(false);
@@ -36,7 +37,7 @@ export default function Lobby(lobbyProps: { websocket: WebSocket, player: Player
                 setPlayer(data.players.find((p: Player) => p.uuid === player.uuid));
                 break;
             default:
-                console.log("Unknown message type for message", data);
+                console.log("Unknown message type while in lobby", data);
         }
     }
 
