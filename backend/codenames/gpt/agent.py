@@ -3,6 +3,7 @@ import openai
 import logging
 from typing import List, Tuple
 
+from codenames.model import CodenamesConnection
 from codenames.options import OPEN_AI_KEY, GPT_MODEL, VERBOSE_LOGGING
 
 SYSTEM_PROMPT_CLUE = (
@@ -17,7 +18,13 @@ SYSTEM_PROMPT_GUESS = (
 
 logging.basicConfig(level=logging.DEBUG if VERBOSE_LOGGING else logging.INFO)
 
-class GPTAgent:
+class GPTConnection(CodenamesConnection):
+    
+    async def send(self, message: dict):
+        '''No op for AI'''
+        return
+
+class ChatGPT:
     def __init__(self):
         self.client = openai.OpenAI(api_key=OPEN_AI_KEY)
 

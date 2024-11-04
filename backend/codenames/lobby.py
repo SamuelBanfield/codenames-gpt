@@ -1,8 +1,8 @@
 from typing import List, Optional, Dict, Any
 import uuid
-from codenames.gpt.agent import GPTAgent
-from codenames.gpt.gpt_connection import GPTConnection
-from codenames.model import CodenamesConnection, CodenamesGame, User
+from codenames.game import CodenamesGame
+from codenames.gpt.agent import GPTConnection
+from codenames.model import CodenamesConnection, User
 
 ROLES = [("red", True), ("blue", True), ("red", False), ("blue", False)]
 
@@ -14,6 +14,7 @@ class Lobby:
 
     def add_user(self, user: User) -> None:
         self.users.append(user)
+        user.in_lobby = True
 
     def remove_user(self, user: User) -> None:
         self.users.remove(user)
@@ -42,12 +43,14 @@ class Lobby:
         return role_assignments
 
     async def lobby_request(self, user: CodenamesConnection, message: Dict[str, Any]) -> None:
-        if message.get("clientMessageType") == "preferencesRequest" and self.game is not None:
+        if message.get("clientMessageType") == "preferencesRequest":
             self.update_user_preferences(user, message.get("player", {}))
             if self.all_ready():
                 await self.start_game()
             else:
                 await self.send_player_update()
+        else:
+            print(f"Unhandled message in lobby: {message}")
 
     def update_user_preferences(self, user: User, player_data: Dict) -> None:
         user.name = player_data.get("name", user.name)
@@ -61,29 +64,27 @@ class Lobby:
     async def start_game(self) -> None:
         gpt_players = self.create_gpt_players()
         self.game = CodenamesGame(self.users + gpt_players)
-        self.assign_endpoints_to_gpt_players(gpt_players)
         self.mark_users_in_game()
         await self.send_player_update()
         await self.game.broadcast_state_update(True)
+        on_turn = self.game.get_on_turn_user()
+        if not on_turn.is_human:
+            clue, number = self.game.gpt.provide_clue(on_turn, self.game.tiles)
+            await self.game.provide_clue(on_turn, clue, number)
 
     def create_gpt_players(self) -> List[User]:
         gpt_players = []
         role_assignments = self.get_role_assignments()
-        agent = GPTAgent()
         for index, (team, is_spy_master) in enumerate(ROLES):
             if index not in role_assignments:
-                gpt_connection = GPTConnection(agent)
-                gpt_player = User(gpt_connection)
+                gpt_connection = GPTConnection()
+                gpt_player = User(gpt_connection, False)
                 gpt_player.is_spy_master = is_spy_master
                 gpt_player.team = team
                 gpt_player.name = f"{'GPT Spy Master' if is_spy_master else 'GPT Guesser'} ({team})"
                 gpt_player.is_ready = True
                 gpt_players.append(gpt_player)
         return gpt_players
-
-    def assign_endpoints_to_gpt_players(self, gpt_players: List[User]) -> None:
-        for user in gpt_players:
-            user.connection.set_end_point(self.game)
 
     def mark_users_in_game(self) -> None:
         for user in self.users:

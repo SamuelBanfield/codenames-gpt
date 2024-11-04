@@ -26,15 +26,17 @@ async def handle_message(user: User, message: str) -> None:
         to_send = {"serverMessageType": "idAssign", "uuid": str(user.connection.uuid)}
         print(f"Sending message: {to_send}")
         await user.connection.send(to_send)
+        return
     for lobby in LOBBIES.values():
         if user in lobby.users:
             print(f"Received message: {json_message}")
             await lobby.request(user, json_message)
+            return
     if json_message.get("clientMessageType") == "createLobby":
         lobby = Lobby()
         lobby.add_user(user)
         LOBBIES[str(lobby.id)] = lobby
-        to_send = {"serverMessageType": "lobbiesUpdate", "lobbies": [str(lobby.id) for lobby in LOBBIES.values()]}
+        to_send = {"serverMessageType": "lobbyJoined", "lobbyId": str(lobby.id)}
         print(f"Sending message: {to_send}")
         await user.connection.send(to_send)
     elif json_message.get("clientMessageType") == "lobbiesRequest":
@@ -45,7 +47,6 @@ async def handle_message(user: User, message: str) -> None:
         lobby_id = json_message.get("lobbyId")
         if lobby_id in LOBBIES.keys():
             LOBBIES[lobby_id].add_user(user)
-            user.in_lobby = True
             to_send = {"serverMessageType": "lobbyJoined", "lobbyId": str(lobby_id)}
             print(f"Sending message: {to_send}")
             await user.connection.send(to_send)
@@ -58,7 +59,7 @@ async def handle_message(user: User, message: str) -> None:
 async def handle_websocket(websocket: WebSocketServerProtocol, path: str) -> None:
     print("New connection")
     connection = CodenamesWebsocketConnection(websocket)
-    user = User(connection)
+    user = User(connection, True)
 
     try:
         async for message in websocket:
@@ -71,7 +72,7 @@ async def handle_websocket(websocket: WebSocketServerProtocol, path: str) -> Non
         for lobby in LOBBIES.values():
             if user in lobby.users:
                 lobby.remove_user(user)
-                if not [lobby.users]:
+                if not [user for user in lobby.users if user.is_human]:
                     LOBBIES.pop(str(lobby.id))
         print(f"Connection for user {user.connection.uuid} closed")
 
