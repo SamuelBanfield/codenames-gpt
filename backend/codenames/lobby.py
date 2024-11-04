@@ -1,4 +1,5 @@
 from typing import List, Optional, Dict, Any
+import uuid
 from codenames.gpt.agent import GPTAgent
 from codenames.gpt.gpt_connection import GPTConnection
 from codenames.model import CodenamesConnection, CodenamesGame, User
@@ -9,6 +10,7 @@ class Lobby:
     def __init__(self) -> None:
         self.users: List[User] = []
         self.game: Optional[CodenamesGame] = None
+        self.id: uuid.UUID = uuid.uuid4()
 
     def add_user(self, user: User) -> None:
         self.users.append(user)
@@ -40,7 +42,7 @@ class Lobby:
         return role_assignments
 
     async def lobby_request(self, user: CodenamesConnection, message: Dict[str, Any]) -> None:
-        if message.get("clientMessageType") == "preferencesRequest":
+        if message.get("clientMessageType") == "preferencesRequest" and self.game is not None:
             self.update_user_preferences(user, message.get("player", {}))
             if self.all_ready():
                 await self.start_game()

@@ -31,6 +31,7 @@ class User:
         self.is_spy_master = False
         self.is_ready = False
         self.in_game = False
+        self.in_lobby = False
         self.team = None
 
     async def send(self, message: dict):
@@ -44,6 +45,7 @@ class User:
             "uuid": str(self.connection.uuid),
             "ready": self.is_ready,
             "inGame": self.in_game,
+            "inLobby": self.in_lobby,
             "role": self.get_role_index()
         }
 

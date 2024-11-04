@@ -19,7 +19,7 @@ class GPTConnection(CodenamesConnection):
         if message["serverMessageType"] == "stateUpdate":
             if message["new_turn"] and message["winner"] is None:
                 role = [role.value for role in Role][message["onTurnRole"]]
-                if role[0] == self.user.team and role[1] == self.user.is_spy_master:
+                if role == (self.user.team, self.user.is_spy_master):
                     if self.user.is_spy_master:
                         await self._provide_clue()
                     else:
