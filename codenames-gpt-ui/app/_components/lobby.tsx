@@ -66,7 +66,7 @@ export default function Lobby(lobbyProps: { websocket: WebSocket, player: Player
             <div className="mb-4">
                 <label htmlFor="name">Name: </label>
                 <input type="text" value={localName} onChange={(e) => setLocalName(e.target.value)} disabled={nameConfirmed} />
-                {!nameConfirmed && <button onClick={confirmName} disabled={localName.length < 2} className={`${player.name.length < 1 ? "bg-gray-200" : "bg-blue-200 hover:bg-blue-100"} ml-2 p-1 rounded`}>
+                {!nameConfirmed && <button onClick={confirmName} disabled={localName.length < 2} className={`${localName.length < 1 ? "bg-gray-200" : "bg-blue-200 hover:bg-blue-100"} ml-2 p-1 rounded`}>
                     Enter lobby
                 </button>}
             </div>
