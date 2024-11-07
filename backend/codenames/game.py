@@ -59,6 +59,8 @@ class CodenamesGame:
         return None
 
     async def guess_tile(self, user: User, tile: Tile) -> Optional[Literal["red", "blue"]]:
+        if self.check_win():
+            print("Ignoring guess as game is over")
         if self.is_user_turn(user) and not user.is_spy_master:
             tile.reveal()
             may_continue: bool = self.update_guesses_remaining(tile, user)
@@ -92,6 +94,8 @@ class CodenamesGame:
         return True
 
     async def provide_clue(self, user: User, word: str, number: int):
+        if self.check_win():
+            print("Ignoring guess as game is over")
         if self.is_user_turn(user) and user.is_spy_master:
             self.clue = (word, number)
             self.guesses_remaining = number

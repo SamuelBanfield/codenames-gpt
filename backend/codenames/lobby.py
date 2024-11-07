@@ -7,14 +7,25 @@ from codenames.model import CodenamesConnection, User
 ROLES = [("red", True), ("blue", True), ("red", False), ("blue", False)]
 
 class Lobby:
-    def __init__(self) -> None:
+    def __init__(self, user: User, name: str) -> None:
+        self.lobby_owner = user
+        self.name = name
         self.users: List[User] = []
         self.game: Optional[CodenamesGame] = None
         self.id: uuid.UUID = uuid.uuid4()
+        self.add_user(user)
 
     def add_user(self, user: User) -> None:
         self.users.append(user)
         user.in_lobby = True
+
+    def to_json(self) -> Dict[str, Any]:
+        return {
+            "name": self.name,
+            "id": str(self.id),
+            "players": len(self.users),
+            "game": self.game is not None
+        }
 
     def remove_user(self, user: User) -> None:
         self.users.remove(user)
@@ -43,14 +54,20 @@ class Lobby:
         return role_assignments
 
     async def lobby_request(self, user: CodenamesConnection, message: Dict[str, Any]) -> None:
-        if message.get("clientMessageType") == "preferencesRequest":
-            self.update_user_preferences(user, message.get("player", {}))
-            if self.all_ready():
-                await self.start_game()
-            else:
-                await self.send_player_update()
-        else:
-            print(f"Unhandled message in lobby: {message}")
+        match message.get("clientMessageType"):
+            case "preferencesRequest":
+                self.update_user_preferences(user, message.get("player", {}))
+                if self.all_ready():
+                    await self.start_game()
+                else:
+                    await self.send_player_update()
+            case "startGame":
+                if self.all_ready() and user == self.lobby_owner:
+                    await self.start_game()
+                else:
+                    print("Ignoring start game request as not all players are ready")
+            case _:
+                print(f"Unhandled message in lobby: {message}")
 
     def update_user_preferences(self, user: User, player_data: Dict) -> None:
         user.name = player_data.get("name", user.name)

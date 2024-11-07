@@ -32,29 +32,29 @@ async def handle_message(user: User, message: str) -> None:
             print(f"Received message: {json_message}")
             await lobby.request(user, json_message)
             return
-    if json_message.get("clientMessageType") == "createLobby":
-        lobby = Lobby()
-        lobby.add_user(user)
-        LOBBIES[str(lobby.id)] = lobby
-        to_send = {"serverMessageType": "lobbyJoined", "lobbyId": str(lobby.id)}
-        print(f"Sending message: {to_send}")
-        await user.connection.send(to_send)
-    elif json_message.get("clientMessageType") == "lobbiesRequest":
-        to_send = {"serverMessageType": "lobbiesUpdate", "lobbies": [str(lobby.id) for lobby in LOBBIES.values()]}
-        print(f"Sending message: {to_send}")
-        await user.connection.send(to_send)
-    elif json_message.get("clientMessageType") == "joinLobby":
-        lobby_id = json_message.get("lobbyId")
-        if lobby_id in LOBBIES.keys():
-            LOBBIES[lobby_id].add_user(user)
-            to_send = {"serverMessageType": "lobbyJoined", "lobbyId": str(lobby_id)}
+    match json_message.get("clientMessageType"):
+        case "createLobby":
+            lobby_name = json_message.get("name")
+            lobby = Lobby(user, lobby_name)
+            LOBBIES[str(lobby.id)] = lobby
+            to_send = {"serverMessageType": "lobbyJoined", "lobbyId": str(lobby.id)}
             print(f"Sending message: {to_send}")
             await user.connection.send(to_send)
-        else:
-            print(f"Request to join non-existent lobby: {lobby_id}")
-    else:
-        print(f"Unhandled message: {json_message}")
-    
+        case "lobbiesRequest":
+            to_send = {"serverMessageType": "lobbiesUpdate", "lobbies": [lobby.to_json() for lobby in LOBBIES.values()]}
+            print(f"Sending message: {to_send}")
+            await user.connection.send(to_send)
+        case "joinLobby":
+            lobby_id = json_message.get("lobbyId")
+            if lobby_id in LOBBIES.keys():
+                LOBBIES[lobby_id].add_user(user)
+                to_send = {"serverMessageType": "lobbyJoined", "lobbyId": str(lobby_id)}
+                print(f"Sending message: {to_send}")
+                await user.connection.send(to_send)
+            else:
+                print(f"Request to join non-existent lobby: {lobby_id}")
+        case _:
+            print(f"Unhandled message: {json_message}")
 
 async def handle_websocket(websocket: WebSocketServerProtocol, path: str) -> None:
     print("New connection")
