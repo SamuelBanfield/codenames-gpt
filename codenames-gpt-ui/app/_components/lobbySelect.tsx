@@ -48,6 +48,13 @@ export default function LobbySelect(props: LobbySelectProps) {
     websocket.send(JSON.stringify({clientMessageType: "joinLobby", lobbyId}));
   }
 
+  const lobbyStatus = (lobby: Lobby) => {
+    if (lobby.game) {
+      return "Game in progress";
+    }
+    return lobby.players >= 4 ? "Full" : "Open";
+  }
+
   return (
     <div>
       <div className="flex flex-col items-center">
@@ -87,13 +94,13 @@ export default function LobbySelect(props: LobbySelectProps) {
         <tbody>
           {lobbies.map((lobby) => (
         <tr 
-          className="cursor-pointer hover:bg-gray-100" 
+          className={`cursor-pointer ${lobbyStatus(lobby) === "Open" ? "hover:bg-gray-100" : "bg-gray-300"}`}
           onClick={() => joinLobby(lobby.id)} 
           key={lobby.id}
         >
           <td className="border border-black px-4 py-2">{lobby.name}</td>
           <td className="border border-black px-4 py-2">{lobby.players}/4</td>
-          <td className="border border-black px-4 py-2">{lobby.game ? "Game in progress" : "Choosing teams..."}</td>
+          <td className="border border-black px-4 py-2">{lobbyStatus(lobby)}</td>
         </tr>
           ))}
           {Array.from({ length: Math.max(0, 10 - lobbies.length) }).map((_, index) => (

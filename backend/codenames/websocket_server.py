@@ -46,8 +46,11 @@ async def handle_message(user: User, message: str) -> None:
             await user.connection.send(to_send)
         case "joinLobby":
             lobby_id = json_message.get("lobbyId")
-            if lobby_id in LOBBIES.keys():
-                LOBBIES[lobby_id].add_user(user)
+            if lobby := LOBBIES.get(lobby_id):
+                if lobby.game is not None or len(lobby.users) >= 4:
+                    print(f"Request to join full lobby: {lobby_id}")
+                    return
+                lobby.add_user(user)
                 to_send = {"serverMessageType": "lobbyJoined", "lobbyId": str(lobby_id)}
                 print(f"Sending message: {to_send}")
                 await user.connection.send(to_send)
