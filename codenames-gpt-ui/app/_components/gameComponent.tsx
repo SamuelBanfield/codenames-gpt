@@ -82,6 +82,16 @@ export default function GameComponent(gameProps: { websocket: WebSocket, player:
       setLocalClue(null);
       setLocalNumber(null);
     };
+
+    const explanatoryText = (role: Role | null) => {
+      if (role === null) {
+        return "";
+      }
+      if (role === Role.redSpymaster || role === Role.blueSpymaster) {
+        return "It's your turn, enter a word that links to as many of your team's words as possible, without linking to the other team's words or the assassin. Then, enter the number of words that your clue links to and press submit";
+      }
+      return "It's your turn, click on the word that links to the clue to guess";
+    }
   
     useEffect(() => {      
       websocket.onmessage = handleMessage;
@@ -108,12 +118,10 @@ export default function GameComponent(gameProps: { websocket: WebSocket, player:
         </div>
         <div className="flex flex-col items-center h-50">
           {winner === null && <div className="flex flex-col items-center">
-            {codenamesClue?.word && <h1 className="text-2xl font-bold mb-4">{codenamesClue?.word}, {codenamesClue?.number}</h1>}
+            {codenamesClue?.word && <h1 className="text-2xl font-bold m-2">{codenamesClue?.word}, {codenamesClue?.number}</h1>}
             <p className="m-2">{
               player.role === onTurnRole 
-                ? "It's your turn" + ((player.role === Role.redSpymaster || player.role === Role.blueSpymaster)
-                  ? ", enter a clue"
-                  : ", click on the word to guess")
+                ? explanatoryText(player.role)
                 : (onTurnRole ? roleTurnToDisplayMap[onTurnRole] : "")}
                 </p>
             {(onTurnRole === Role.bluePlayer || onTurnRole === Role.redPlayer) && <p className="mb-4">Guesses remaining: {guessesRemaining}</p>}
@@ -122,7 +130,7 @@ export default function GameComponent(gameProps: { websocket: WebSocket, player:
             </p>
           </div>
           }
-          {(winner !== null) && <h1>Game over, the {winner} team has won</h1>
+          {(winner !== null) && <h1 className="m-2">Game over, the {winner} team has won!</h1>
           }
         </div>
         <div className="m-2">

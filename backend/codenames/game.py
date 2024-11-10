@@ -55,7 +55,7 @@ class CodenamesGame:
         if not any(tile.team == "blue" and not tile.revealed for tile in self.tiles):
             return "blue"
         if any(tile.team == "assassin" and tile.revealed for tile in self.tiles):
-            return "red" if self.current_turn.value[0] == "blue" else "blue"
+            return self.current_turn.value[0]
         return None
 
     async def guess_tile(self, user: User, tile: Tile) -> Optional[Literal["red", "blue"]]:
