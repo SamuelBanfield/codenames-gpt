@@ -1,6 +1,5 @@
 "use client";
 
-import { UUID } from "crypto";
 import { useEffect, useState } from "react";
 
 export enum Role {
@@ -63,30 +62,31 @@ export default function Lobby(lobbyProps: { websocket: WebSocket, player: Player
 
     return (
         <main className="flex min-h-screen flex-col items-center p-24">
-            <div className="mb-4">
+            <h1 className="text-2xl font-bold py-2">Codenames GPT</h1>
+            <div className="mb-4 py-5">
                 <label htmlFor="name">Name: </label>
                 <input type="text" value={localName} onChange={(e) => setLocalName(e.target.value)} disabled={nameConfirmed} />
-                {!nameConfirmed && <button onClick={confirmName} disabled={localName.length < 2} className={`${localName.length < 1 ? "bg-gray-200" : "bg-blue-200 hover:bg-blue-100"} ml-2 p-1 rounded`}>
+                {!nameConfirmed && <button onClick={confirmName} disabled={localName.length < 1} className={`${localName.length < 1 ? "bg-gray-200" : "bg-blue-200 hover:bg-blue-100"} ml-2 p-1 rounded`}>
                     Enter lobby
                 </button>}
             </div>
             {nameConfirmed && 
             <div className="grid grid-cols-2 gap-4 mb-4">
-                <div className={`${playerWithRole(Role.redSpymaster)? "bg-red-100" : "bg-red-300 cursor-pointer hover:margin-2 hover:shadow-md transition duration-300"} p-6 flex justify-center rounded`} onClick={() => requestPreferences({...player, role: Role.redSpymaster})}>
-                    Red Spymaster
-                    {playerWithRole(Role.redSpymaster) && <span className="text-xs">{playerWithRole(Role.redSpymaster)?.name}</span>}
+                <div className={`${playerWithRole(Role.redSpymaster)? "bg-red-100" : "bg-red-300 cursor-pointer hover:margin-2 hover:shadow-md transition duration-300"} p-6 justify-center rounded`} onClick={() => requestPreferences({...player, role: Role.redSpymaster})}>
+                    <div>Red Spymaster</div>
+                    <div className="text-s h-6"><i>{playerWithRole(Role.redSpymaster)?.name}</i></div>
                 </div>
-                <div className={`${playerWithRole(Role.blueSpymaster)? "bg-blue-100" : "bg-blue-300 cursor-pointer hover:margin-2 hover:shadow-md transition duration-300"} p-6 flex justify-center rounded`} onClick={() => requestPreferences({...player, role: Role.blueSpymaster})}>
-                    Blue Spymaster
-                    {playerWithRole(Role.blueSpymaster) && <span className="text-xs">{playerWithRole(Role.blueSpymaster)?.name}</span>}
+                <div className={`${playerWithRole(Role.blueSpymaster)? "bg-blue-100" : "bg-blue-300 cursor-pointer hover:margin-2 hover:shadow-md transition duration-300"} p-6 justify-center rounded`} onClick={() => requestPreferences({...player, role: Role.blueSpymaster})}>
+                    <div>Blue Spymaster</div>
+                    <div className="text-s h-6"><i>{playerWithRole(Role.blueSpymaster)?.name}</i></div>
                 </div>
-                <div className={`${playerWithRole(Role.redPlayer)? "bg-red-100" : "bg-red-300 cursor-pointer hover:margin-2 hover:shadow-md transition duration-300"} p-6 flex justify-center rounded`} onClick={() => requestPreferences({...player, role: Role.redPlayer})}>
-                    Red Player
-                    {playerWithRole(Role.redPlayer) && <span className="text-xs">{playerWithRole(Role.redPlayer)?.name}</span>}
+                <div className={`${playerWithRole(Role.redPlayer)? "bg-red-100" : "bg-red-300 cursor-pointer hover:margin-2 hover:shadow-md transition duration-300"} p-6 justify-center rounded`} onClick={() => requestPreferences({...player, role: Role.redPlayer})}>
+                    <div>Red Player</div>
+                    <div className="text-s h-6"><i>{playerWithRole(Role.redPlayer)?.name}</i></div>
                 </div>
-                <div className={`${playerWithRole(Role.bluePlayer)? "bg-blue-100" : "bg-blue-300 cursor-pointer hover:margin-2 hover:shadow-md transition duration-300"} p-6 flex justify-center rounded`} onClick={() => requestPreferences({...player, role: Role.bluePlayer})}>
+                <div className={`${playerWithRole(Role.bluePlayer)? "bg-blue-100" : "bg-blue-300 cursor-pointer hover:margin-2 hover:shadow-md transition duration-300"} p-6 justify-center rounded`} onClick={() => requestPreferences({...player, role: Role.bluePlayer})}>
                     Blue Player
-                    {playerWithRole(Role.bluePlayer) && <span className="text-xs">{playerWithRole(Role.bluePlayer)?.name}</span>}
+                    <div className="text-s h-6"><i>{playerWithRole(Role.bluePlayer)?.name}</i></div>
                 </div>
             </div>}
             {nameConfirmed && <div className="flex items-center">
