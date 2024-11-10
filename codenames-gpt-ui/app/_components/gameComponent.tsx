@@ -138,19 +138,19 @@ export default function GameComponent(gameProps: { websocket: WebSocket, player:
             <>
               <input
                 type="text"
+                className="border p-1 rounded m-1"  
                 placeholder="Enter clue"
                 value={localClue ? localClue : ""}
                 onChange={(e) => setLocalClue(e.target.value)}
-                className="mr-2"
               />
               <input
                 type="number"
                 placeholder="Enter number"
                 value={localNumber ? localNumber : 0}
                 onChange={(e) => e.target.valueAsNumber >= 0 ? setLocalNumber(e.target.valueAsNumber) : 0}
-                className="mr-2"
+                className="border p-1 m-1 w-20"
               />
-              <button onClick={provideClue} className={`${player.name.length < 1 ? "bg-gray-200" : "bg-blue-200 hover:bg-blue-100"} ml-2 p-1 rounded`}>Submit Clue</button>
+              <button onClick={provideClue} className={`${player.name.length < 1 ? "bg-gray-200" : "bg-blue-200 hover:bg-blue-100"} m-1 p-1 rounded`}>Submit Clue</button>
             </>
           )}
         </div>

@@ -65,7 +65,7 @@ export default function Lobby(lobbyProps: { websocket: WebSocket, player: Player
             <h1 className="text-2xl font-bold py-2">Codenames GPT</h1>
             <div className="mb-4 py-5">
                 <label htmlFor="name">Name: </label>
-                <input type="text" value={localName} onChange={(e) => setLocalName(e.target.value)} disabled={nameConfirmed} />
+                <input className="border p-1 rounded" type="text" value={localName} onChange={(e) => setLocalName(e.target.value)} disabled={nameConfirmed} />
                 {!nameConfirmed && <button onClick={confirmName} disabled={localName.length < 1} className={`${localName.length < 1 ? "bg-gray-200" : "bg-blue-200 hover:bg-blue-100"} ml-2 p-1 rounded`}>
                     Enter lobby
                 </button>}
