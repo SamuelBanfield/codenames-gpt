@@ -73,6 +73,7 @@ class CodenamesGame:
         else:
             print(f"Ignoring guess from {user.name} as it is not their turn")
 
+
     def is_user_turn(self, user: User) -> bool:
         return self.current_turn.value == (user.team, user.is_spy_master)
     
@@ -106,6 +107,8 @@ class CodenamesGame:
             on_turn_user = self.get_on_turn_user()
             if not on_turn_user.is_human:
                 guesses = self.gpt.make_guesses(word, number, self.tiles)
+                if not guesses:
+                    await self.pass_turn(on_turn_user)
                 while self.guesses_remaining > 0 and guesses:
                     await self.guess_tile(on_turn_user, get_tile_by_word(guesses.pop(0), self.tiles))
         else:
@@ -135,6 +138,10 @@ class CodenamesGame:
             self.current_turn = Role(("red" if user.team == "blue" else "blue", True))
             self.clue = None
             await self.broadcast_state_update(True)
+            on_turn = self.get_on_turn_user()
+            if not on_turn.is_human:
+                clue, number = self.gpt.provide_clue(on_turn, self.tiles)
+                await self.provide_clue(on_turn, clue, number)
 
     def get_user_by_connection(self, connection: CodenamesConnection) -> User:
         for user in self.users:
