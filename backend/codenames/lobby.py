@@ -27,11 +27,6 @@ class Lobby:
             "game": self.game is not None
         }
 
-    def remove_user(self, user: User) -> None:
-        self.users.remove(user)
-        if not self.users:
-            self.game = None
-
     def all_ready(self) -> bool:
         return all(user.is_ready for user in self.users if user.name)
 
@@ -61,11 +56,6 @@ class Lobby:
                     await self.start_game()
                 else:
                     await self.send_player_update()
-            case "startGame":
-                if self.all_ready() and user == self.lobby_owner:
-                    await self.start_game()
-                else:
-                    print("Ignoring start game request as not all players are ready")
             case _:
                 print(f"Unhandled message in lobby: {message}")
 

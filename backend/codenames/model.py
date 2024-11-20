@@ -5,14 +5,11 @@ from codenames.options import VERBOSE_LOGGING
 
 
 class Role(Enum):
+    """Enum for the different roles in the game"""
     RED_SPYMASTER = ("red", True)
     BLUE_SPYMASTER = ("blue", True)
     RED_OPERATIVE = ("red", False)
     BLUE_OPERATIVE = ("blue", False)
-
-class GameResult(Enum):
-    RED_WIN = "red"
-    BLUE_WIN = "blue"
 
 
 class CodenamesConnection:
@@ -24,6 +21,7 @@ class CodenamesConnection:
 
 
 class User:
+    """Model of a user in the game"""
     def __init__(self, connection: CodenamesConnection, is_human: bool):
         self.name = ""
         self.connection = connection
@@ -55,6 +53,7 @@ class User:
         return None
 
 class Tile:
+    """Model of a tile in the game"""
     def __init__(self, word: str, team: str, is_revealed: bool = False):
         self.word = word
         self.revealed = is_revealed

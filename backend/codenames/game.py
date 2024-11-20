@@ -11,11 +11,8 @@ def generate_tiles() -> List[Tile]:
     with open(pathlib.Path(__file__).parent / ".." / "wordlist.txt") as f:
         words = f.readlines()
     used_words = random.sample(words, 25)
-    red_tiles = [Tile(word.strip(), "red") for word in used_words[:9]]
-    blue_tiles = [Tile(word.strip(), "blue") for word in used_words[9:17]]
-    assassin_tile = [Tile(used_words[17].strip(), "assassin")]
-    neutral_tiles = [Tile(word.strip(), "neutral") for word in used_words[18:25]]
-    all_tiles = red_tiles + blue_tiles + assassin_tile + neutral_tiles
+    teams = ["red"] * 9 + ["blue"] * 8 + ["assassin"] + ["neutral"] * 7
+    all_tiles = [Tile(word.strip(), team) for word, team in zip(used_words, teams)]
     random.shuffle(all_tiles)
     return all_tiles
 
@@ -142,9 +139,3 @@ class CodenamesGame:
             if not on_turn.is_human:
                 clue, number = self.gpt.provide_clue(on_turn, self.tiles)
                 await self.provide_clue(on_turn, clue, number)
-
-    def get_user_by_connection(self, connection: CodenamesConnection) -> User:
-        for user in self.users:
-            if user.connection == connection:
-                return user
-        raise ValueError(f"No user found for connection {connection}")
