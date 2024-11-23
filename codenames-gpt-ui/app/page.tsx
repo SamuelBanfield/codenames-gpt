@@ -30,6 +30,7 @@ export default function Home() {
     if (data.serverMessageType === "idAssign") {
       console.log("idAssign", data.uuid);
       setPlayer({ ...player, uuid: data.uuid });
+      websocket.send(JSON.stringify({ clientMessageType: "lobbiesRequest" }));
     }
     else {
       console.log("Unknown message type for message", data);
