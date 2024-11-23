@@ -2,9 +2,11 @@
 import asyncio
 import pathlib
 import random
+import time
 from typing import List, Literal, Optional, Tuple
 
-from codenames.model import CodenamesConnection, Role, Tile, User
+from codenames.options import GUESS_DELAY
+from codenames.model import Role, Tile, User
 from codenames.gpt.gpt_connection import GPTAgent
 
 def generate_tiles() -> List[Tile]:
@@ -66,6 +68,7 @@ class CodenamesGame:
             on_turn = self.get_on_turn_user()
             if not may_continue and not on_turn.is_human:
                 clue, number = self.gpt.provide_clue(on_turn, self.tiles)
+                time.sleep(GUESS_DELAY)
                 await self.provide_clue(on_turn, clue, number)
         else:
             print(f"Ignoring guess from {user.name} as it is not their turn")
@@ -107,6 +110,7 @@ class CodenamesGame:
                 if not guesses:
                     await self.pass_turn(on_turn_user)
                 while self.guesses_remaining > 0 and guesses:
+                    time.sleep(GUESS_DELAY)
                     await self.guess_tile(on_turn_user, get_tile_by_word(guesses.pop(0), self.tiles))
         else:
             print(f"Ignoring clue from {user.name} as it is not their turn")
