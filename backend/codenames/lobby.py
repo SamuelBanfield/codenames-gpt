@@ -48,7 +48,7 @@ class Lobby:
                 role_assignments[ROLES.index((user.team, user.is_spy_master))] = user.name
         return role_assignments
 
-    async def lobby_request(self, user: CodenamesConnection, message: Dict[str, Any]) -> None:
+    async def lobby_request(self, user: User, message: Dict[str, Any]) -> None:
         match message.get("clientMessageType"):
             case "preferencesRequest":
                 self.update_user_preferences(user, message.get("player", {}))

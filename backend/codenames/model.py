@@ -23,14 +23,14 @@ class CodenamesConnection:
 class User:
     """Model of a user in the game"""
     def __init__(self, connection: CodenamesConnection, is_human: bool):
-        self.name = ""
-        self.connection = connection
-        self.is_spy_master = False
-        self.is_ready = False
-        self.in_game = False
-        self.in_lobby = False
-        self.team = None
-        self.is_human = is_human
+        self.name: str = ""
+        self.connection: CodenamesConnection = connection
+        self.is_spy_master: bool = False
+        self.is_ready: bool = False
+        self.in_game: bool = False
+        self.in_lobby: bool = False
+        self.team: Optional[str] = None
+        self.is_human: bool = is_human
 
     async def send(self, message: dict):
         if VERBOSE_LOGGING:
@@ -47,7 +47,7 @@ class User:
             "role": self.get_role_index()
         }
 
-    def get_role_index(self) -> Optional[Role]:
+    def get_role_index(self) -> Optional[int]:
         if self.team is not None:
             return [role.value for role in Role].index((self.team, self.is_spy_master))
         return None

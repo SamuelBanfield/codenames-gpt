@@ -1,104 +1,157 @@
 import asyncio
 import json
+import logging
 import traceback
-from uuid import UUID
-from venv import logger
 import websockets
 from websockets import WebSocketServerProtocol
 from typing import Any, Dict
 
-from codenames.lobby import Lobby
-from codenames.model import CodenamesConnection, User
+from codenames.model import User, CodenamesConnection
 from codenames.options import HOST, WEBSOCKET_PORT
+from codenames.services.lobby_service import LobbyService, InMemoryLobbyRepository
+from codenames.message_router import MessageRouter, UserContext
+from codenames.services.connection_service import Connection, ConnectionManager
 
-class CodenamesWebsocketConnection(CodenamesConnection):
-    def __init__(self, socket: WebSocketServerProtocol):
+logger = logging.getLogger(__name__)
+
+class WebSocketConnectionAdapter(CodenamesConnection):
+    """Adapter to make WebSocketConnection compatible with CodenamesConnection"""
+    
+    def __init__(self, websocket_connection: 'WebSocketConnection'):
         super().__init__()
-        self.socket = socket
-
+        self.websocket_connection = websocket_connection
+        # Use the same UUID as the websocket connection
+        self.uuid = websocket_connection.id
+    
     async def send(self, message: Dict[str, Any]) -> None:
-        await self.socket.send(json.dumps(message))
+        await self.websocket_connection.send_message(message)
 
-LOBBIES: Dict[UUID, Lobby] = {}
+class WebSocketConnection(Connection):
+    """WebSocket implementation of Connection"""
+    
+    def __init__(self, websocket: WebSocketServerProtocol):
+        super().__init__()
+        self.websocket = websocket
+    
+    async def send_message(self, message: Dict[str, Any]) -> None:
+        try:
+            await self.websocket.send(json.dumps(message))
+            logger.debug(f"Sent message to {self.id}: {message.get('serverMessageType', 'unknown')}")
+        except Exception as e:
+            logger.error(f"Failed to send message to {self.id}: {e}")
+            raise
+    
+    async def close(self) -> None:
+        try:
+            await self.websocket.close()
+        except Exception as e:
+            logger.debug(f"Error closing websocket {self.id}: {e}")
 
-class MessageHandler:
-    """Handles messages for a particular user and keeps track of their lobby"""
-    def __init__(self, user: User):
-        self.user = user
-        self.lobby = None
+class WebSocketServer:
+    """Main websocket server with dependency injection"""
+    
+    def __init__(self, lobby_service: LobbyService, connection_manager: ConnectionManager):
+        self.lobby_service = lobby_service
+        self.connection_manager = connection_manager
+        self.message_router = MessageRouter(lobby_service)
+        self.user_contexts: Dict[str, UserContext] = {}
 
-    async def handle_message(self, message: str) -> None:
-        json_message = json.loads(message)
-        if self.lobby is not None:
-            logger.info(f"Received message: {json_message}")
-            await self.lobby.request(self.user, json_message)
-            return
-        match json_message.get("clientMessageType"):
-            case "idRequest":
-                await self.id_assign()
-            case "createLobby":
-                await self.create_lobby(json_message)
-            case "lobbiesRequest":
-                await self.lobbies_update()
-            case "joinLobby":
-                await self.join_lobby(json_message)
-            case _:
-                logger.warning(f"Unhandled message: {json_message}")
-
-    async def send(self, to_send: Dict[str, Any]) -> None:
-        logger.info(f"Sending message: {to_send}")
-        await self.user.connection.send(to_send)
-
-    async def id_assign(self) -> None:
-        await self.send({"serverMessageType": "idAssign", "uuid": str(self.user.connection.uuid)})
-
-    async def create_lobby(self, json_message: Dict[str, any]) -> None:
-        lobby_name = json_message.get("name")
-        lobby = Lobby(self.user, lobby_name)
-        LOBBIES[str(lobby.id)] = lobby
-        self.lobby = lobby
-        await self.send({"serverMessageType": "lobbyJoined", "lobbyId": str(lobby.id)})
-
-    async def lobbies_update(self) -> None:
-        await self.send({"serverMessageType": "lobbiesUpdate", "lobbies": [lobby.to_json() for lobby in LOBBIES.values()]})
-
-    async def join_lobby(self, json_message: Dict[str, any]) -> None:
-        lobby_id = json_message.get("lobbyId")
-        if lobby := LOBBIES.get(lobby_id):
-            if lobby.game is not None or len(lobby.users) >= 4:
-                logger.info(f"Request to join full lobby: {lobby_id}")
-                return
-            lobby.add_user(self.user)
-            self.lobby = lobby
-            await self.send({"serverMessageType": "lobbyJoined", "lobbyId": str(lobby_id)})
+    async def handle_connection(self, websocket: WebSocketServerProtocol, path: str) -> None:
+        """Handle a new WebSocket connection"""
+        connection = WebSocketConnection(websocket)
+        connection_id = self.connection_manager.add_connection(connection)
+        
+        # Create user and context
+        adapter = WebSocketConnectionAdapter(connection)
+        user = User(adapter, True)
+        user_context = UserContext(user, connection_id)
+        self.user_contexts[connection_id] = user_context
+        
+        logger.info(f"New connection established: {connection_id}")
+        
+        try:
+            async for raw_message in websocket:
+                await self._handle_message(user_context, raw_message)
+        except websockets.exceptions.ConnectionClosed:
+            logger.info(f"Connection {connection_id} closed normally")
+        except Exception as e:
+            logger.error(f"Error in connection {connection_id}: {traceback.format_exc()}")
+        finally:
+            await self._cleanup_connection(connection_id)
+    
+    async def _handle_message(self, user_context: UserContext, raw_message) -> None:
+        """Handle an incoming message"""
+        # Convert message to string
+        if isinstance(raw_message, str):
+            message_str = raw_message
+        elif isinstance(raw_message, bytes):
+            message_str = raw_message.decode('utf-8')
         else:
-            logger.info(f"Request to join non-existent lobby: {lobby_id}")
+            message_str = str(raw_message)
+        
+        # Parse JSON
+        try:
+            message_data = json.loads(message_str)
+        except json.JSONDecodeError as e:
+            logger.error(f"Invalid JSON from {user_context.connection_id}: {e}")
+            await self._send_error(user_context, "Invalid JSON format")
+            return
+        
+        # Check if user is in a lobby and should forward to lobby
+        if user_context.lobby_id:
+            lobby = await self.lobby_service.repository.get_lobby(user_context.lobby_id)
+            if lobby:
+                logger.info(f"Forwarding message to lobby {user_context.lobby_id}")
+                await lobby.request(user_context.user, message_data)
+                return
+        
+        # Route message to appropriate handler
+        message_type = message_data.get("clientMessageType")
+        if not message_type:
+            await self._send_error(user_context, "Missing clientMessageType")
+            return
+        
+        response = await self.message_router.route_message(user_context, message_type, message_data)
+        if response:
+            connection = self.connection_manager.get_connection(user_context.connection_id)
+            if connection:
+                await connection.send_message(response)
+    
+    async def _send_error(self, user_context: UserContext, error_message: str) -> None:
+        """Send an error message to the user"""
+        connection = self.connection_manager.get_connection(user_context.connection_id)
+        if connection:
+            await connection.send_message({
+                "serverMessageType": "error",
+                "message": error_message
+            })
+    
+    async def _cleanup_connection(self, connection_id: str) -> None:
+        """Clean up when a connection is closed"""
+        user_context = self.user_contexts.pop(connection_id, None)
+        if user_context and user_context.lobby_id:
+            await self.lobby_service.leave_lobby(user_context.user, user_context.lobby_id)
+        
+        self.connection_manager.remove_connection(connection_id)
+        logger.info(f"Cleaned up connection {connection_id}")
 
-
-async def handle_websocket(websocket: WebSocketServerProtocol, path: str) -> None:
-    logger.info("New connection")
-    user = User(CodenamesWebsocketConnection(websocket), True)
-    message_handler = MessageHandler(user)
-
-    try:
-        async for message in websocket:
-            await message_handler.handle_message(message)
-    except websockets.exceptions.ConnectionClosed:
-        pass
-    except Exception as e:
-        logger.error(f"Encountered exception: {traceback.format_exc()}")
-    finally:
-        if message_handler.lobby is not None:
-            lobby = message_handler.lobby
-            lobby.users.remove(user)
-            if not [user for user in lobby.users if user.is_human]:
-                LOBBIES.pop(str(lobby.id))
-        logger.info(f"Connection for user {user.connection.uuid} closed")
+async def create_server() -> WebSocketServer:
+    """Factory function to create a properly configured server"""
+    lobby_repository = InMemoryLobbyRepository()
+    lobby_service = LobbyService(lobby_repository)
+    connection_manager = ConnectionManager()
+    
+    return WebSocketServer(lobby_service, connection_manager)
 
 async def main() -> None:
-    async with websockets.serve(handle_websocket, HOST, WEBSOCKET_PORT):
+    """Main entry point"""
+    server = await create_server()
+    
+    logger.info(f"Starting server on {HOST}:{WEBSOCKET_PORT}")
+    async with websockets.serve(server.handle_connection, HOST, WEBSOCKET_PORT):
         logger.info(f"Server started on {HOST}:{WEBSOCKET_PORT}")
-        await asyncio.Future()
+        await asyncio.Future()  # Run forever
 
 if __name__ == "__main__":
+    logging.basicConfig(level=logging.INFO)
     asyncio.run(main())

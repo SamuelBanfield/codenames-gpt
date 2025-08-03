@@ -1,5 +1,5 @@
 import asyncio
-import codenames.websocket_server
+import codenames.websocket_server as websocket_server
 
 if __name__ == "__main__":
-    asyncio.run(codenames.websocket_server.main())
+    asyncio.run(websocket_server.main())

@@ -4,5 +4,10 @@
 
 :root {
   --foreground-rgb: 0, 0, 0;
-  --background-rgb: 230, 230, 230;
+  --background-rgb: 245, 245, 245;
+}
+
+body {
+  background-color: rgb(var(--background-rgb));
+  color: rgb(var(--foreground-rgb));
 }
