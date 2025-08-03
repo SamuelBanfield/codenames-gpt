@@ -76,7 +76,7 @@ class Lobby:
         await self.game.broadcast_state_update(True)
         on_turn = self.game.get_on_turn_user()
         if not on_turn.is_human:
-            clue, number = self.game.gpt.provide_clue(on_turn, self.game.tiles)
+            clue, number = await self.game.gpt.provide_clue(on_turn, self.game.tiles)
             await self.game.provide_clue(on_turn, clue, number)
 
     def create_gpt_players(self) -> List[User]:

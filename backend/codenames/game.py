@@ -65,13 +65,43 @@ class CodenamesGame:
             tile.reveal()
             may_continue: bool = self.update_guesses_remaining(tile, user)
             await self.broadcast_state_update(self.guesses_remaining <= 0)
+            # Get the on_turn user AFTER potentially switching turns
             on_turn = self.get_on_turn_user()
             if not may_continue and not on_turn.is_human:
-                clue, number = self.gpt.provide_clue(on_turn, self.tiles)
-                time.sleep(GUESS_DELAY)
-                await self.provide_clue(on_turn, clue, number)
+                # Schedule AI clue asynchronously to avoid blocking human input
+                asyncio.create_task(self._handle_ai_clue(on_turn))
         else:
             print(f"Ignoring guess from {user.name} as it is not their turn")
+
+    async def _handle_ai_clue(self, user: User):
+        """Handle AI clue generation asynchronously to avoid blocking human input"""
+        try:
+            clue, number = await self.gpt.provide_clue(user, self.tiles)
+            await asyncio.sleep(GUESS_DELAY)
+            await self.provide_clue(user, clue, number)
+        except Exception as e:
+            print(f"Error in AI clue generation for {user.name}: {e}")
+
+    async def _handle_ai_guessing(self, word: str, number: int, user: User):
+        """Handle AI guessing asynchronously to avoid blocking human input"""
+        try:
+            guesses = await self.gpt.make_guesses(word, number, self.tiles)
+            if not guesses:
+                await self.pass_turn(user)
+                return
+                
+            while self.guesses_remaining > 0 and guesses:
+                await asyncio.sleep(GUESS_DELAY)
+                guess_word = guesses.pop(0)
+                try:
+                    tile = get_tile_by_word(guess_word, self.tiles)
+                    await self.guess_tile(user, tile)
+                except ValueError:
+                    print(f"AI {user.name} guessed invalid word: {guess_word}")
+                    # Skip this invalid guess and continue with the next one
+                    continue
+        except Exception as e:
+            print(f"Error in AI guessing for {user.name}: {e}")
 
 
     def is_user_turn(self, user: User) -> bool:
@@ -106,12 +136,8 @@ class CodenamesGame:
             await self.broadcast_state_update(True)
             on_turn_user = self.get_on_turn_user()
             if not on_turn_user.is_human:
-                guesses = self.gpt.make_guesses(word, number, self.tiles)
-                if not guesses:
-                    await self.pass_turn(on_turn_user)
-                while self.guesses_remaining > 0 and guesses:
-                    time.sleep(GUESS_DELAY)
-                    await self.guess_tile(on_turn_user, get_tile_by_word(guesses.pop(0), self.tiles))
+                # Schedule AI guessing asynchronously to avoid blocking human input
+                asyncio.create_task(self._handle_ai_guessing(word, number, on_turn_user))
         else:
             print(f"Ignoring clue from {user.name} as it is not their turn")
 
@@ -141,5 +167,5 @@ class CodenamesGame:
             await self.broadcast_state_update(True)
             on_turn = self.get_on_turn_user()
             if not on_turn.is_human:
-                clue, number = self.gpt.provide_clue(on_turn, self.tiles)
-                await self.provide_clue(on_turn, clue, number)
+                # Schedule AI clue asynchronously to avoid blocking human input
+                asyncio.create_task(self._handle_ai_clue(on_turn))

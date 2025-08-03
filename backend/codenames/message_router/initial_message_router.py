@@ -79,7 +79,7 @@ class LobbiesRequestHandler:
             "lobbies": [lobby.to_json() for lobby in lobbies]
         }
 
-class MessageRouter:
+class InitialMessageRouter:
     """Routes messages to appropriate handlers"""
     def __init__(self, lobby_service):
         self.handlers = {

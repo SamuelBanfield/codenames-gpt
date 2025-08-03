@@ -9,7 +9,7 @@ from typing import Any, Dict
 from codenames.model import User, CodenamesConnection
 from codenames.options import HOST, WEBSOCKET_PORT
 from codenames.services.lobby_service import LobbyService, InMemoryLobbyRepository
-from codenames.message_router import MessageRouter, UserContext
+from codenames.message_router.initial_message_router import InitialMessageRouter, UserContext
 from codenames.services.connection_service import Connection, ConnectionManager
 
 logger = logging.getLogger(__name__)
@@ -53,7 +53,7 @@ class WebSocketServer:
     def __init__(self, lobby_service: LobbyService, connection_manager: ConnectionManager):
         self.lobby_service = lobby_service
         self.connection_manager = connection_manager
-        self.message_router = MessageRouter(lobby_service)
+        self.message_router = InitialMessageRouter(lobby_service)
         self.user_contexts: Dict[str, UserContext] = {}
 
     async def handle_connection(self, websocket: WebSocketServerProtocol, path: str) -> None:

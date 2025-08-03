@@ -26,12 +26,12 @@ class GPTConnection(CodenamesConnection):
 
 class ChatGPT:
     def __init__(self):
-        self.client = openai.OpenAI(api_key=OPEN_AI_KEY)
+        self.client = openai.AsyncOpenAI(api_key=OPEN_AI_KEY)
 
-    def get_clue(self, words_to_guess: List[str], words_to_avoid: List[str]) -> Tuple[str, int]:
+    async def get_clue(self, words_to_guess: List[str], words_to_avoid: List[str]) -> Tuple[str, int]:
         logging.debug(f"Getting clue from GPT to link {words_to_guess}")
         start = time.time()
-        response = self._get_gpt_response(
+        response = await self._get_gpt_response(
             SYSTEM_PROMPT_CLUE,
             f"Your team's words that you must link are [{','.join(words_to_guess)}] and the other team's words that you MUST NOT link to are [{','.join(words_to_avoid)}]"
         )
@@ -41,13 +41,18 @@ class ChatGPT:
             logging.error(f"Failed to get response from chat GPT: {response.choices[0].finish_reason}")
             return "", 0
 
-        clue, number = self._parse_clue_response(response.choices[0].message.content)
+        content = response.choices[0].message.content
+        if content is None:
+            logging.error("GPT response content is None")
+            return "", 0
+            
+        clue, number = self._parse_clue_response(content)
         logging.debug(f"GPT clue: {clue}, {number}")
         return clue, number
 
-    def guess(self, clue: Tuple[str, int], words: List[str]) -> List[str]:
+    async def guess(self, clue: Tuple[str, int], words: List[str]) -> List[str]:
         logging.debug(f"GPT guessing for clue {clue}")
-        response = self._get_gpt_response(
+        response = await self._get_gpt_response(  # Make this async
             SYSTEM_PROMPT_GUESS,
             f"The possible words are [{','.join(words)}], you must choose the {clue[1]} words from the list I have given you that link most closely to '{clue[0]}'. Make sure your guesses are from the list [{','.join(words)}], and all link to the clue '{clue[0]}'"
         )
@@ -56,13 +61,18 @@ class ChatGPT:
             logging.error(f"Failed to get response from chat GPT: {response.choices[0].finish_reason}")
             return []
 
-        guesses = self._parse_guess_response(response.choices[0].message.content, words, clue[1])
+        content = response.choices[0].message.content
+        if content is None:
+            logging.error("GPT response content is None")
+            return []
+            
+        guesses = self._parse_guess_response(content, words, clue[1])
         logging.debug(f"GPT guessed: {guesses}")
         return guesses
 
-    def _get_gpt_response(self, system_prompt: str, user_prompt: str):
+    async def _get_gpt_response(self, system_prompt: str, user_prompt: str):
         try:
-            return self.client.chat.completions.create(
+            return await self.client.chat.completions.create(
                 model=GPT_MODEL,
                 messages=[
                     {"role": "system", "content": system_prompt},
