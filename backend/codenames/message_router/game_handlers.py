@@ -1,72 +1,79 @@
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, Tuple
 
-from codenames.game import get_tile_by_word
+from codenames.game import CodenamesGame, get_tile_by_word
 from codenames.lobby import Lobby
 from codenames.message_router.message_handler import UserContext
 from codenames.services.lobby_service import LobbyService
 
 
-class InitialiseGameHandler:
+class BaseGameHandler:
+    """Base class for game message handlers"""
+    def __init__(self, lobby_service: LobbyService):
+        self.lobby_service = lobby_service
+
+    async def _validate_context(self, user_context: UserContext) -> Tuple[Optional[Dict[str, Any]], Optional[CodenamesGame]]:
+        """Common validation logic - returns (error_response, game)"""
+        if not user_context.lobby_id:
+            return {
+                "serverMessageType": "error",
+                "message": "User not in a lobby"
+            }, None
+            
+        lobby: Optional[Lobby] = await self.lobby_service.get_lobby(user_context.lobby_id)
+        if not lobby:
+            return {
+                "serverMessageType": "error",
+                "message": "Lobby not found"
+            }, None
+            
+        if not lobby.game:
+            return {
+                "serverMessageType": "error",
+                "message": "Game not found"
+            }, None
+            
+        return None, lobby.game
+
+
+class InitialiseGameHandler(BaseGameHandler):
     """Handle game initialization requests"""
-    def __init__(self, lobby_service: LobbyService):
-        self.lobby_service = lobby_service
 
     async def handle(self, user_context: UserContext, data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
-        if not user_context.lobby_id:
-            return {
-                "serverMessageType": "error",
-                "message": "User not in a lobby"
-            }
-        lobby: Optional[Lobby] = await self.lobby_service.get_lobby(user_context.lobby_id)
-        if not lobby or not lobby.game:
-            return {
-                "serverMessageType": "error",
-                "message": "Game not found"
-            }
-        await lobby.game.broadcast_state_update(False)
+        error_response, game = await self._validate_context(user_context)
+        if error_response:
+            return error_response
+        assert game is not None, "For type checking"
 
-class GuessTileHandler:
+        await game.broadcast_state_update(False)
+
+
+class GuessTileHandler(BaseGameHandler):
     """Handle tile guesses"""
-    def __init__(self, lobby_service: LobbyService):
-        self.lobby_service = lobby_service
 
     async def handle(self, user_context: UserContext, data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
-        if not user_context.lobby_id:
-            return {
-                "serverMessageType": "error",
-                "message": "User not in a lobby"
-            }
-        lobby: Optional[Lobby] = await self.lobby_service.get_lobby(user_context.lobby_id)
-        if not lobby or not lobby.game:
-            return {
-                "serverMessageType": "error",
-                "message": "Game not found"
-            }
+        error_response, game = await self._validate_context(user_context)
+        if error_response:
+            return error_response
+        assert game is not None, "For type checking"
+        
         word = data.get("word")
         if not word:
             return {
                 "serverMessageType": "error",
                 "message": "Missing word in guess"
             }
-        await lobby.game.guess_tile(user_context.user, get_tile_by_word(word, lobby.game.tiles))
+        await game.guess_tile(user_context.user, get_tile_by_word(word, game.tiles))
 
-class ProvideClueHandler:
+
+class ProvideClueHandler(BaseGameHandler):
     """Handle clue provision"""
-    def __init__(self, lobby_service: LobbyService):
-        self.lobby_service = lobby_service
 
     async def handle(self, user_context: UserContext, data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
-        if not user_context.lobby_id:
-            return {
-                "serverMessageType": "error",
-                "message": "User not in a lobby"
-            }
-        lobby: Optional[Lobby] = await self.lobby_service.get_lobby(user_context.lobby_id)
-        if not lobby or not lobby.game:
-            return {
-                "serverMessageType": "error",
-                "message": "Game not found"
-            }
+        error_response, game = await self._validate_context(user_context)
+        if error_response:
+            return error_response
+        assert game is not None, "For type checking"
+        
         word = data.get("word")
         number = data.get("number")
         if not word or number is None:
@@ -74,4 +81,4 @@ class ProvideClueHandler:
                 "serverMessageType": "error",
                 "message": "Missing word or number in clue"
             }
-        await lobby.game.provide_clue(user_context.user, word, number)
+        await game.provide_clue(user_context.user, word, number)
