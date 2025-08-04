@@ -8,7 +8,7 @@ from unittest.mock import patch, MagicMock, AsyncMock
 from codenames.lobby import Lobby
 from codenames.model import User, CodenamesConnection
 from codenames.services.lobby_service import LobbyService, InMemoryLobbyRepository
-from codenames.message_router.initial_message_router import InitialMessageRouter, UserContext
+from codenames.message_router.message_router import MessageRouter, UserContext
 
 
 def create_mock_connection():
@@ -55,7 +55,7 @@ class TestCoreFunctionalityAndBufferingFixes:
     async def test_message_routing_and_lobby_handlers(self):
         """Test essential message routing functionality"""
         mock_lobby_service = AsyncMock()
-        router = InitialMessageRouter(mock_lobby_service)
+        router = MessageRouter(mock_lobby_service)
         
         # Test ID request
         mock_user = MagicMock()

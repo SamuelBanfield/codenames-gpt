@@ -6,10 +6,11 @@ import websockets
 from websockets import WebSocketServerProtocol
 from typing import Any, Dict
 
+from codenames.message_router.message_router import MessageRouter
 from codenames.model import User, CodenamesConnection
 from codenames.options import HOST, WEBSOCKET_PORT
 from codenames.services.lobby_service import LobbyService, InMemoryLobbyRepository
-from codenames.message_router.initial_message_router import InitialMessageRouter, UserContext
+from codenames.message_router.message_router import MessageRouter, UserContext
 from codenames.services.connection_service import Connection, ConnectionManager
 
 logger = logging.getLogger(__name__)
@@ -53,7 +54,7 @@ class WebSocketServer:
     def __init__(self, lobby_service: LobbyService, connection_manager: ConnectionManager):
         self.lobby_service = lobby_service
         self.connection_manager = connection_manager
-        self.message_router = InitialMessageRouter(lobby_service)
+        self.message_router = MessageRouter(lobby_service)
         self.user_contexts: Dict[str, UserContext] = {}
 
     async def handle_connection(self, websocket: WebSocketServerProtocol, path: str) -> None:
@@ -88,7 +89,7 @@ class WebSocketServer:
             message_str = raw_message.decode('utf-8')
         else:
             message_str = str(raw_message)
-        
+
         # Parse JSON
         try:
             message_data = json.loads(message_str)
@@ -97,25 +98,13 @@ class WebSocketServer:
             await self._send_error(user_context, "Invalid JSON format")
             return
         
-        # Check if user is in a lobby and should forward to lobby
-        if user_context.lobby_id:
-            lobby = await self.lobby_service.repository.get_lobby(user_context.lobby_id)
-            if lobby:
-                logger.info(f"Forwarding message to lobby {user_context.lobby_id}")
-                await lobby.request(user_context.user, message_data)
-                return
-        
-        # Route message to appropriate handler
-        message_type = message_data.get("clientMessageType")
-        if not message_type:
+        # Pass to message router 
+        if message_type := message_data.get("clientMessageType"):
+            if response := await self.message_router.route_message(user_context, message_type, message_data):
+                if connection := self.connection_manager.get_connection(user_context.connection_id):
+                    await connection.send_message(response)
+        else:
             await self._send_error(user_context, "Missing clientMessageType")
-            return
-        
-        response = await self.message_router.route_message(user_context, message_type, message_data)
-        if response:
-            connection = self.connection_manager.get_connection(user_context.connection_id)
-            if connection:
-                await connection.send_message(response)
     
     async def _send_error(self, user_context: UserContext, error_message: str) -> None:
         """Send an error message to the user"""

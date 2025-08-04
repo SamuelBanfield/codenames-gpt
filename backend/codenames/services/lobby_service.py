@@ -110,3 +110,7 @@ class LobbyService:
         all_lobbies = await self.repository.list_lobbies()
         return [lobby for lobby in all_lobbies 
                 if lobby.game is None and len(lobby.users) < 4]
+    
+    async def get_lobby(self, lobby_id: str) -> Optional[Lobby]:
+        """Get a specific lobby by ID"""
+        return await self.repository.get_lobby(lobby_id)

@@ -35,29 +35,12 @@ class Lobby:
         for user in self.users:
             await user.connection.send(message)
 
-    async def request(self, user: User, message: Dict[str, Any]) -> None:
-        if self.game:
-            await self.game.handle_request(user, message)
-        else:
-            await self.lobby_request(user, message)
-
     def get_role_assignments(self) -> Dict[int, str]:
         role_assignments = {}
         for user in self.users:
             if user.team:
                 role_assignments[ROLES.index((user.team, user.is_spy_master))] = user.name
         return role_assignments
-
-    async def lobby_request(self, user: User, message: Dict[str, Any]) -> None:
-        match message.get("clientMessageType"):
-            case "preferencesRequest":
-                self.update_user_preferences(user, message.get("player", {}))
-                if self.all_ready():
-                    await self.start_game()
-                else:
-                    await self.send_player_update()
-            case _:
-                print(f"Unhandled message in lobby: {message}")
 
     def update_user_preferences(self, user: User, player_data: Dict) -> None:
         user.name = player_data.get("name", user.name)

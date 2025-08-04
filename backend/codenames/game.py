@@ -141,24 +141,6 @@ class CodenamesGame:
         else:
             print(f"Ignoring clue from {user.name} as it is not their turn")
 
-    async def handle_request(self, user: User, message: dict):
-        if "clientMessageType" not in message:
-            raise ValueError("No message type specified")
-        
-        if self.check_win():
-            print("Game is over, ignoring request")
-            return
-
-        match message["clientMessageType"]:
-            case "initialiseRequest":
-                await self.broadcast_state_update(False)
-            case "guessTile":
-                await self.guess_tile(user, get_tile_by_word(message["word"], self.tiles))
-            case "provideClue":
-                await self.provide_clue(user, message["word"], message["number"])
-            case _:
-                raise ValueError("Unknown request type")
-
     async def pass_turn(self, user: User):
         if self.is_user_turn(user) and not user.is_spy_master:
             self.guesses_remaining = 0
