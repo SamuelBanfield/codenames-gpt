@@ -2,9 +2,7 @@ from typing import List, Optional, Dict, Any
 import uuid
 from codenames.game import CodenamesGame
 from codenames.gpt.agent import GPTConnection
-from codenames.model import CodenamesConnection, User
-
-ROLES = [("red", True), ("blue", True), ("red", False), ("blue", False)]
+from codenames.model import CodenamesConnection, User, Role
 
 class Lobby:
     def __init__(self, user: User, name: str) -> None:
@@ -39,7 +37,8 @@ class Lobby:
         role_assignments = {}
         for user in self.users:
             if user.team:
-                role_assignments[ROLES.index((user.team, user.is_spy_master))] = user.name
+                role = Role.from_team_and_role(user.team, user.is_spy_master)
+                role_assignments[role.index] = user.name
         return role_assignments
 
     def update_user_preferences(self, user: User, player_data: Dict) -> None:
@@ -49,7 +48,8 @@ class Lobby:
             index = int(player_data["role"])
             assigned_roles = self.get_role_assignments()
             if index not in assigned_roles:
-                user.team, user.is_spy_master = ROLES[index]
+                role = Role.from_index(index)
+                user.team, user.is_spy_master = role.team, role.is_spymaster
 
     async def start_game(self) -> None:
         gpt_players = self.create_gpt_players()
@@ -65,7 +65,9 @@ class Lobby:
     def create_gpt_players(self) -> List[User]:
         gpt_players = []
         role_assignments = self.get_role_assignments()
-        for index, (team, is_spy_master) in enumerate(ROLES):
+        for role in Role.all_roles():
+            index = role.index
+            team, is_spy_master = role.team, role.is_spymaster
             if index not in role_assignments:
                 gpt_connection = GPTConnection()
                 gpt_player = User(gpt_connection, False)

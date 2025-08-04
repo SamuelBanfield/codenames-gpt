@@ -41,7 +41,7 @@ class CodenamesGame:
             "serverMessageType": "stateUpdate",
             "tiles": [tile.to_json(user.is_spy_master) for tile in self.tiles],
             "players": [u.to_json() for u in self.users],
-            "onTurnRole": [role for role in Role].index(self.current_turn),
+            "onTurnRole": self.current_turn.index,
             "guessesRemaining": self.guesses_remaining,
             "clue": {"word": self.clue[0].upper(), "number": self.clue[1]} if self.clue else None,
             "new_turn": is_on_turn_update,
@@ -65,7 +65,6 @@ class CodenamesGame:
             tile.reveal()
             may_continue: bool = self.update_guesses_remaining(tile, user)
             await self.broadcast_state_update(self.guesses_remaining <= 0)
-            # Get the on_turn user AFTER potentially switching turns
             on_turn = self.get_on_turn_user()
             if not may_continue and not on_turn.is_human:
                 # Schedule AI clue asynchronously to avoid blocking human input
@@ -89,7 +88,7 @@ class CodenamesGame:
             if not guesses:
                 await self.pass_turn(user)
                 return
-                
+
             while self.guesses_remaining > 0 and guesses:
                 await asyncio.sleep(GUESS_DELAY)
                 guess_word = guesses.pop(0)
@@ -119,8 +118,9 @@ class CodenamesGame:
             self.guesses_remaining -= 1
         else:
             self.guesses_remaining = 0
-        if self.guesses_remaining <= 0:
-            self.current_turn = Role(("red" if user.team == "blue" else "blue", True))
+            assert user.team is not None, "User team should be set"
+            other_team = "red" if user.team == "blue" else "blue"
+            self.current_turn = Role.from_team_and_role(other_team, True)
             self.clue = None
             return False
         return True
@@ -132,7 +132,8 @@ class CodenamesGame:
         if self.is_user_turn(user) and user.is_spy_master:
             self.clue = (word, number)
             self.guesses_remaining = number
-            self.current_turn = Role((user.team, False))
+            assert user.team is not None, "User team should be set"
+            self.current_turn = Role.from_team_and_role(user.team, False)
             await self.broadcast_state_update(True)
             on_turn_user = self.get_on_turn_user()
             if not on_turn_user.is_human:
@@ -144,7 +145,9 @@ class CodenamesGame:
     async def pass_turn(self, user: User):
         if self.is_user_turn(user) and not user.is_spy_master:
             self.guesses_remaining = 0
-            self.current_turn = Role(("red" if user.team == "blue" else "blue", True))
+            assert user.team is not None, "User team should be set"
+            other_team = "red" if user.team == "blue" else "blue"
+            self.current_turn = Role.from_team_and_role(other_team, True)
             self.clue = None
             await self.broadcast_state_update(True)
             on_turn = self.get_on_turn_user()

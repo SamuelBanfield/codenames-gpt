@@ -10,6 +10,37 @@ class Role(Enum):
     BLUE_SPYMASTER = ("blue", True)
     RED_OPERATIVE = ("red", False)
     BLUE_OPERATIVE = ("blue", False)
+    
+    @property
+    def team(self) -> str:
+        return self.value[0]
+    
+    @property
+    def is_spymaster(self) -> bool:
+        return self.value[1]
+    
+    @property
+    def index(self) -> int:
+        """Index as exposed to the frontend"""
+        return list(Role).index(self)
+    
+    @classmethod
+    def from_team_and_role(cls, team: str, is_spymaster: bool) -> 'Role':
+        for role in cls:
+            if role.team == team and role.is_spymaster == is_spymaster:
+                return role
+        raise ValueError(f"No role found for team={team}, is_spymaster={is_spymaster}")
+    
+    @classmethod
+    def from_index(cls, index: int) -> 'Role':
+        roles = list(cls)
+        if 0 <= index < len(roles):
+            return roles[index]
+        raise ValueError(f"Invalid role index: {index}")
+    
+    @classmethod
+    def all_roles(cls) -> list['Role']:
+        return list(cls)
 
 
 class CodenamesConnection:
@@ -48,8 +79,22 @@ class User:
         }
 
     def get_role_index(self) -> Optional[int]:
+        """Get the role index for frontend compatibility"""
         if self.team is not None:
-            return [role.value for role in Role].index((self.team, self.is_spy_master))
+            try:
+                role = Role.from_team_and_role(self.team, self.is_spy_master)
+                return role.index
+            except ValueError:
+                return None
+        return None
+    
+    def get_role(self) -> Optional[Role]:
+        """Get the Role enum for this user"""
+        if self.team is not None:
+            try:
+                return Role.from_team_and_role(self.team, self.is_spy_master)
+            except ValueError:
+                return None
         return None
 
 class Tile:
