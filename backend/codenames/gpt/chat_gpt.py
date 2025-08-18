@@ -16,7 +16,6 @@ SYSTEM_PROMPT_GUESS = (
     "Return the words you think are most closely linked to the clue provided separated by commas on a single line e.g: WORD1,WORD2,WORD3"
 )
 
-logging.basicConfig(level=logging.DEBUG if VERBOSE_LOGGING else logging.INFO)
 
 class GPTConnection(CodenamesConnection):
     

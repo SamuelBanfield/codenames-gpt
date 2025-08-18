@@ -1,4 +1,4 @@
-from typing import Dict, Any, Optional
+from typing import Dict, Any
 
 from codenames.services.lobby_service import LobbyService
 from codenames.message_router.message_handler import UserContext

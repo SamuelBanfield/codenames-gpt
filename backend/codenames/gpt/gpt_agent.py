@@ -1,16 +1,8 @@
 from typing import List, Tuple
-from codenames.gpt.agent import ChatGPT
-from codenames.model import CodenamesConnection, Tile, User
+from codenames.gpt.chat_gpt import ChatGPT
+from codenames.model import Tile, User
 from codenames.options import GUESS_DELAY
 
-class GPTConnection(CodenamesConnection):
-
-    def __init__(self):
-        super().__init__()
-
-    async def send(self, message: dict):
-        '''No op for AI'''
-        return
 
 class GPTAgent:
     def __init__(self):

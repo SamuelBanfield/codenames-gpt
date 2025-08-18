@@ -2,15 +2,16 @@
 import asyncio
 import pathlib
 import random
-import time
 from typing import List, Literal, Optional, Tuple
 
+from typing import TYPE_CHECKING
+from codenames.services.clue_service import ClueService
 from codenames.options import GUESS_DELAY
 from codenames.model import Role, Tile, User
-from codenames.gpt.gpt_connection import GPTAgent
+from codenames.gpt.gpt_agent import GPTAgent
 
 def generate_tiles() -> List[Tile]:
-    with open(pathlib.Path(__file__).parent / ".." / "wordlist.txt") as f:
+    with open(pathlib.Path(__file__).parent.parent.parent / "wordlist.txt") as f:
         words = f.readlines()
     used_words = random.sample(words, 25)
     teams = ["red"] * 9 + ["blue"] * 8 + ["assassin"] + ["neutral"] * 7
@@ -18,11 +19,6 @@ def generate_tiles() -> List[Tile]:
     random.shuffle(all_tiles)
     return all_tiles
 
-def get_tile_by_word(word: str, tiles: List[Tile]) -> Tile:
-    for tile in tiles:
-        if tile.word.replace(" ", "").lower() == word.replace(" ", "").lower():
-            return tile
-    raise ValueError(f"No tile found for word {word}")
 
 class CodenamesGame:
     def __init__(self, users: List[User]):
@@ -31,7 +27,8 @@ class CodenamesGame:
         self.current_turn: Role = Role.RED_SPYMASTER
         self.guesses_remaining = 0
         self.clue: Optional[Tuple[str, int]] = None
-        self.gpt: GPTAgent = GPTAgent()
+        # Allow dependency injection of clue service (for testing / alternate AI implementations)
+        self.clue_service: ClueService = ClueService(GPTAgent())
 
     async def broadcast_state_update(self, is_on_turn_update: bool):
         await asyncio.gather(*(user.send(self.get_state_update(user, is_on_turn_update)) for user in self.users))
@@ -57,7 +54,7 @@ class CodenamesGame:
             return self.current_turn.value[0]
         return None
 
-    async def guess_tile(self, user: User, tile: Tile) -> Optional[Literal["red", "blue"]]:
+    async def guess_tile(self, user: User, tile: Tile) -> None:
         if self.check_win():
             print("Ignoring guess as game is over")
             return
@@ -67,40 +64,9 @@ class CodenamesGame:
             await self.broadcast_state_update(self.guesses_remaining <= 0)
             on_turn = self.get_on_turn_user()
             if not may_continue and not on_turn.is_human:
-                # Schedule AI clue asynchronously to avoid blocking human input
-                asyncio.create_task(self._handle_ai_clue(on_turn))
+                asyncio.create_task(self.clue_service.create_clue(self, on_turn))
         else:
             print(f"Ignoring guess from {user.name} as it is not their turn")
-
-    async def _handle_ai_clue(self, user: User):
-        """Handle AI clue generation asynchronously to avoid blocking human input"""
-        try:
-            clue, number = await self.gpt.provide_clue(user, self.tiles)
-            await asyncio.sleep(GUESS_DELAY)
-            await self.provide_clue(user, clue, number)
-        except Exception as e:
-            print(f"Error in AI clue generation for {user.name}: {e}")
-
-    async def _handle_ai_guessing(self, word: str, number: int, user: User):
-        """Handle AI guessing asynchronously to avoid blocking human input"""
-        try:
-            guesses = await self.gpt.make_guesses(word, number, self.tiles)
-            if not guesses:
-                await self.pass_turn(user)
-                return
-
-            while self.guesses_remaining > 0 and guesses:
-                await asyncio.sleep(GUESS_DELAY)
-                guess_word = guesses.pop(0)
-                try:
-                    tile = get_tile_by_word(guess_word, self.tiles)
-                    await self.guess_tile(user, tile)
-                except ValueError:
-                    print(f"AI {user.name} guessed invalid word: {guess_word}")
-                    # Skip this invalid guess and continue with the next one
-                    continue
-        except Exception as e:
-            print(f"Error in AI guessing for {user.name}: {e}")
 
 
     def is_user_turn(self, user: User) -> bool:
@@ -118,6 +84,7 @@ class CodenamesGame:
             self.guesses_remaining -= 1
         else:
             self.guesses_remaining = 0
+        if self.guesses_remaining <= 0:
             assert user.team is not None, "User team should be set"
             other_team = "red" if user.team == "blue" else "blue"
             self.current_turn = Role.from_team_and_role(other_team, True)
@@ -137,8 +104,7 @@ class CodenamesGame:
             await self.broadcast_state_update(True)
             on_turn_user = self.get_on_turn_user()
             if not on_turn_user.is_human:
-                # Schedule AI guessing asynchronously to avoid blocking human input
-                asyncio.create_task(self._handle_ai_guessing(word, number, on_turn_user))
+                asyncio.create_task(self.clue_service.make_guesses(word, number, self, on_turn_user))
         else:
             print(f"Ignoring clue from {user.name} as it is not their turn")
 
@@ -152,5 +118,4 @@ class CodenamesGame:
             await self.broadcast_state_update(True)
             on_turn = self.get_on_turn_user()
             if not on_turn.is_human:
-                # Schedule AI clue asynchronously to avoid blocking human input
-                asyncio.create_task(self._handle_ai_clue(on_turn))
+                asyncio.create_task(self.clue_service.create_clue(self, on_turn))

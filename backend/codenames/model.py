@@ -75,27 +75,8 @@ class User:
             "ready": self.is_ready,
             "inGame": self.in_game,
             "inLobby": self.in_lobby,
-            "role": self.get_role_index()
+            "role": Role.from_team_and_role(self.team, self.is_spy_master).index if self.team else None
         }
-
-    def get_role_index(self) -> Optional[int]:
-        """Get the role index for frontend compatibility"""
-        if self.team is not None:
-            try:
-                role = Role.from_team_and_role(self.team, self.is_spy_master)
-                return role.index
-            except ValueError:
-                return None
-        return None
-    
-    def get_role(self) -> Optional[Role]:
-        """Get the Role enum for this user"""
-        if self.team is not None:
-            try:
-                return Role.from_team_and_role(self.team, self.is_spy_master)
-            except ValueError:
-                return None
-        return None
 
 class Tile:
     """Model of a tile in the game"""

@@ -49,24 +49,21 @@ class WebSocketConnection(Connection):
             logger.debug(f"Error closing websocket {self.id}: {e}")
 
 class WebSocketServer:
-    """Main websocket server with dependency injection"""
+    """Main websocket server"""
     
     def __init__(self, lobby_service: LobbyService, connection_manager: ConnectionManager):
         self.lobby_service = lobby_service
         self.connection_manager = connection_manager
         self.message_router = MessageRouter(lobby_service)
-        self.user_contexts: Dict[str, UserContext] = {}
 
     async def handle_connection(self, websocket: WebSocketServerProtocol, path: str) -> None:
         """Handle a new WebSocket connection"""
         connection = WebSocketConnection(websocket)
         connection_id = self.connection_manager.add_connection(connection)
         
-        # Create user and context
         adapter = WebSocketConnectionAdapter(connection)
         user = User(adapter, True)
         user_context = UserContext(user, connection_id)
-        self.user_contexts[connection_id] = user_context
         
         logger.info(f"New connection established: {connection_id}")
         
@@ -78,11 +75,10 @@ class WebSocketServer:
         except Exception as e:
             logger.error(f"Error in connection {connection_id}: {traceback.format_exc()}")
         finally:
-            await self._cleanup_connection(connection_id)
+            await self._cleanup_connection(user_context)
     
     async def _handle_message(self, user_context: UserContext, raw_message) -> None:
         """Handle an incoming message"""
-        # Convert message to string
         if isinstance(raw_message, str):
             message_str = raw_message
         elif isinstance(raw_message, bytes):
@@ -90,7 +86,6 @@ class WebSocketServer:
         else:
             message_str = str(raw_message)
 
-        # Parse JSON
         try:
             message_data = json.loads(message_str)
         except json.JSONDecodeError as e:
@@ -98,7 +93,6 @@ class WebSocketServer:
             await self._send_error(user_context, "Invalid JSON format")
             return
         
-        # Pass to message router 
         if message_type := message_data.get("clientMessageType"):
             if response := await self.message_router.route_message(user_context, message_type, message_data):
                 if connection := self.connection_manager.get_connection(user_context.connection_id):
@@ -114,15 +108,14 @@ class WebSocketServer:
                 "serverMessageType": "error",
                 "message": error_message
             })
-    
-    async def _cleanup_connection(self, connection_id: str) -> None:
+
+    async def _cleanup_connection(self, user_context: UserContext) -> None:
         """Clean up when a connection is closed"""
-        user_context = self.user_contexts.pop(connection_id, None)
         if user_context and user_context.lobby_id:
             await self.lobby_service.leave_lobby(user_context.user, user_context.lobby_id)
-        
-        self.connection_manager.remove_connection(connection_id)
-        logger.info(f"Cleaned up connection {connection_id}")
+
+        self.connection_manager.remove_connection(user_context.connection_id)
+        logger.info(f"Cleaned up connection {user_context.connection_id}")
 
 async def create_server() -> WebSocketServer:
     """Factory function to create a properly configured server"""

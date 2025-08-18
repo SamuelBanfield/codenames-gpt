@@ -1,6 +1,7 @@
 from typing import Dict, Any, Optional, Tuple
 
-from codenames.game import CodenamesGame, get_tile_by_word
+from codenames.util import get_tile_by_word
+from codenames.game.game import CodenamesGame
 from codenames.lobby import Lobby
 from codenames.message_router.message_handler import UserContext
 from codenames.services.lobby_service import LobbyService
