@@ -69,7 +69,10 @@ class WebSocketServer:
         
         try:
             async for raw_message in websocket:
-                await self._handle_message(user_context, raw_message)
+                try:
+                    await self._handle_message(user_context, raw_message)
+                except Exception as e:
+                    logger.error(f"Error in connection {connection_id} with message {raw_message}: {traceback.format_exc()}")
         except websockets.exceptions.ConnectionClosed:
             logger.info(f"Connection {connection_id} closed normally")
         except Exception as e:
@@ -94,6 +97,7 @@ class WebSocketServer:
             return
         
         if message_type := message_data.get("clientMessageType"):
+            logger.info(f"Received message from {user_context.connection_id}: {message_data}")
             if response := await self.message_router.route_message(user_context, message_type, message_data):
                 if connection := self.connection_manager.get_connection(user_context.connection_id):
                     await connection.send_message(response)

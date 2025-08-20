@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { Player, Role } from "./lobby";
+import { useWS } from "../wsProvider";
 
 const notRevealedColourMap = {
   "red": "bg-red-200",
@@ -32,9 +33,9 @@ const getTileColour = (tile: CodenamesTile): string => {
     : notRevealedColourMap[tile.team];
 }
 
-export default function GameComponent(gameProps: { websocket: WebSocket, player: Player}) {
+export default function GameComponent(gameProps: { player: Player}) {
 
-    const { websocket, player } = gameProps;
+    const { player } = gameProps;
 
     const [codenamesTiles, setCodenamesTiles] = useState<CodenamesTile[]>([]);
     const [codenamesClue, setCodenamesClue] = useState<CodenamesClue | null>(null);
@@ -46,10 +47,10 @@ export default function GameComponent(gameProps: { websocket: WebSocket, player:
     const [guessesRemaining, setGuessesRemaining] = useState<number | null>(null);
 
     const [winner, setWinner] = useState<string | null>(null);
-  
-    const handleMessage = (event: MessageEvent) => {
-      console.log("message", event.data);
-      const data = JSON.parse(event.data);
+
+    const { send, lastMessage } = useWS();
+
+    const handleMessage = (data: any) => {
       switch (data.serverMessageType) {
         case "stateUpdate":
           setCodenamesTiles(data.tiles);
@@ -74,11 +75,11 @@ export default function GameComponent(gameProps: { websocket: WebSocket, player:
     };
   
     const guessTile = (tile: CodenamesTile) => {
-      websocket.send(JSON.stringify({ clientMessageType: "guessTile", "word": tile.word }));
+      send({ clientMessageType: "guessTile", "word": tile.word });
     };
 
     const provideClue = () => {
-      websocket.send(JSON.stringify({ clientMessageType: "provideClue", "word": localClue, "number": localNumber }));
+      send({ clientMessageType: "provideClue", "word": localClue, "number": localNumber });
       setLocalClue(null);
       setLocalNumber(null);
     };
@@ -92,10 +93,15 @@ export default function GameComponent(gameProps: { websocket: WebSocket, player:
       }
       return "It's your turn, click on the word that links to the clue to guess";
     }
-  
-    useEffect(() => {      
-      websocket.onmessage = handleMessage;
-      websocket.send(JSON.stringify({ clientMessageType: "initialiseRequest" }));
+
+    useEffect(() => {
+      if (lastMessage) {
+        handleMessage(lastMessage);
+      }
+    }, [lastMessage])
+
+    useEffect(() => {
+      send({ clientMessageType: "initialiseRequest" });
     }, []);
   
     return (

@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { Player } from "./lobby";
+import { useWS } from "../wsProvider";
 
 interface Lobby {
   id: string;
@@ -9,27 +10,33 @@ interface Lobby {
 }
 
 type LobbySelectProps = {
-  websocket: WebSocket;
   player: Player;
   setPlayer: (player: Player) => void;
 }
 
 export default function LobbySelect(props: LobbySelectProps) {
 
-  const { websocket, player, setPlayer } = props;
+  const { player, setPlayer } = props;
   const [lobbies, setLobbies] = useState<Lobby[]>([]);
   const [lobbyName, setLobbyName] = useState("");
 
+  const { send, lastMessage } = useWS();
+
   const createNewLobby = (name: string) => {
-    websocket.send(JSON.stringify({ clientMessageType: "createLobby", name }));
+    send({ clientMessageType: "createLobby", name });
   };
 
   const refreshLobbies = () => {
-    websocket.send(JSON.stringify({ clientMessageType: "lobbiesRequest" }));
+    send({ clientMessageType: "lobbiesRequest" });
   }
 
-  websocket.onmessage = (event: MessageEvent) => {
-    const data = JSON.parse(event.data);
+  useEffect(() => {
+    if (lastMessage) {
+      handleMessage(lastMessage);
+    }
+  }, [lastMessage]);
+
+  const handleMessage = (data: any) => {
     switch (data.serverMessageType) {
       case "lobbiesUpdate":
         console.log("lobbiesUpdate", data.lobbies);
@@ -45,7 +52,7 @@ export default function LobbySelect(props: LobbySelectProps) {
   }
 
   const joinLobby = (lobbyId: string) => {
-    websocket.send(JSON.stringify({clientMessageType: "joinLobby", lobbyId}));
+    send({ clientMessageType: "joinLobby", lobbyId });
   }
 
   const lobbyStatus = (lobby: Lobby) => {

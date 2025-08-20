@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useWS } from "../wsProvider";
 
 export enum Role {
     redSpymaster,
@@ -18,14 +19,15 @@ export type Player = {
     role: Role | null;
 };
 
-export default function Lobby(lobbyProps: { websocket: WebSocket, player: Player, setPlayer: (player: Player) => void }) {
-        
-    const {websocket, player, setPlayer} = lobbyProps;
+export default function Lobby(lobbyProps: { player: Player, setPlayer: (player: Player) => void }) {
+
+    const { player, setPlayer } = lobbyProps;
     const [nameConfirmed, setNameConfirmed] = useState(false);
 
-    const handleMessage = (event: MessageEvent) => {
-        console.log("message", event.data);
-        const data = JSON.parse(event.data);
+    const { send, lastMessage } = useWS();
+
+    const handleMessage = (data: any) => {
+        console.log("message", data);
         switch (data.serverMessageType) {
             case "playerUpdate":
                 setPlayers(data.players);
@@ -43,7 +45,7 @@ export default function Lobby(lobbyProps: { websocket: WebSocket, player: Player
     const [players, setPlayers] = useState<Player[]>([player]);
 
     const requestPreferences = (player: Player) => {
-        websocket.send(JSON.stringify({clientMessageType: "preferencesRequest", player}));
+        send({ clientMessageType: "preferencesRequest", player });
     }
 
     const [localName, setLocalName] = useState("");
@@ -53,8 +55,10 @@ export default function Lobby(lobbyProps: { websocket: WebSocket, player: Player
     }
 
     useEffect(() => {
-        websocket.onmessage = handleMessage;
-    }, []);
+        if (lastMessage) {
+            handleMessage(lastMessage);
+        }
+    }, [lastMessage]);
 
     const playerWithRole = (role: Role) => {
         return players.find(p => p.role === role);

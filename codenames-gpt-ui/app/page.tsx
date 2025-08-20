@@ -4,10 +4,9 @@ import { useEffect, useState } from "react"
 import GameComponent from "./_components/gameComponent";
 import Lobby, { Player } from "./_components/lobby";
 
-import options from "../.properties.json";
 import LobbySelect from "./_components/lobbySelect";
-
-const initial = new WebSocket(`ws://${options.host}:${options.websocketPort}/`);
+import { useWS } from "./wsProvider";
+import { stat } from "fs";
 
 export default function Home() {
 
@@ -22,15 +21,13 @@ export default function Home() {
     }
   );
 
-  const [websocket, setWebsocket] = useState<WebSocket>(initial);
-  const [connectionFailed, setConnectionFailed] = useState(false);
+  const { status, send, lastMessage } = useWS();
 
-  const handleIdMessage = (event: MessageEvent) => {
-    const data = JSON.parse(event.data);
+  const handleIdMessage = (data: any) => {
     if (data.serverMessageType === "idAssign") {
       console.log("idAssign", data.uuid);
       setPlayer({ ...player, uuid: data.uuid });
-      websocket.send(JSON.stringify({ clientMessageType: "lobbiesRequest" }));
+      send({ clientMessageType: "lobbiesRequest" });
     }
     else {
       console.log("Unknown message type for message", data);
@@ -38,40 +35,40 @@ export default function Home() {
   }
 
   useEffect(() => {
-    websocket.onmessage = handleIdMessage
-    if (websocket.readyState === websocket.OPEN) {
-      websocket.send(JSON.stringify({ clientMessageType: "idRequest" }));
+    if (lastMessage && lastMessage.serverMessageType === "idAssign") {
+      console.log("idAssign", lastMessage.uuid);
+      setPlayer({ ...player, uuid: lastMessage.uuid });
+      send({ clientMessageType: "lobbiesRequest" });
     }
     else {
-      websocket.onopen = () => websocket.send(JSON.stringify({ clientMessageType: "idRequest" }));
-      websocket.onerror = (event) => {
-        console.error("Connection failed", event);
-        setConnectionFailed(true);
-      }
+      console.log("Unknown message type for message", lastMessage);
     }
-    }, []
-  );
+  }, [lastMessage])
+
+  useEffect(() => {
+    send({ clientMessageType: "idRequest" });
+  }, [])
 
   console.log("player", player);
 
-  if (websocket.readyState === websocket.CONNECTING || player.uuid === null) {
+  if (status === "connecting" || player.uuid === null) {
     return <div>Connecting...</div>;
   }
 
-  if (connectionFailed) {
+  if (status === "closed") {
     return <div>Connection failed</div>;
   }
   
   if (player.inGame) {
-    return <GameComponent websocket={websocket} player={player} />;
+    return <GameComponent player={player} />;
   }
 
   if (player.inLobby) {
-    return <Lobby websocket={websocket} player={player} setPlayer={setPlayer} />;
+    return <Lobby player={player} setPlayer={setPlayer} />;
   }
 
   return (
-    <LobbySelect websocket={websocket} player={player} setPlayer={setPlayer} />
+    <LobbySelect player={player} setPlayer={setPlayer} />
   );
 }
 
