@@ -42,7 +42,7 @@ class CodenamesGame:
             "guessesRemaining": self.guesses_remaining,
             "clue": {"word": self.clue[0].upper(), "number": self.clue[1]} if self.clue else None,
             "new_turn": is_on_turn_update,
-            "winner": self.check_win()
+            "winner": self.check_win(),
         }
 
     def check_win(self) -> Optional[Literal["red", "blue"]]:

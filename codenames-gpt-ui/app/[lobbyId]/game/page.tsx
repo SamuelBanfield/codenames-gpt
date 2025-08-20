@@ -124,7 +124,7 @@ export default function GameComponent() {
     }, [lastMessage])
 
     useEffect(() => {
-      send({ clientMessageType: "initialiseRequest" });
+      send({ clientMessageType: "initialiseRequest", includeUserInfo: true });
     }, []);
   
     return (
