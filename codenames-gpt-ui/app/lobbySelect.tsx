@@ -1,6 +1,9 @@
+'use client'
+
 import { useEffect, useState } from "react";
-import { Player } from "./lobby";
-import { useWS } from "../wsProvider";
+import { Player } from "./_components/lobby";
+import { useWS } from "./wsProvider";
+import { useRouter } from "next/navigation";
 
 interface Lobby {
   id: string;
@@ -9,14 +12,7 @@ interface Lobby {
   game: boolean;
 }
 
-type LobbySelectProps = {
-  player: Player;
-  setPlayer: (player: Player) => void;
-}
-
-export default function LobbySelect(props: LobbySelectProps) {
-
-  const { player, setPlayer } = props;
+export default function LobbySelect() {
   const [lobbies, setLobbies] = useState<Lobby[]>([]);
   const [lobbyName, setLobbyName] = useState("");
 
@@ -29,6 +25,8 @@ export default function LobbySelect(props: LobbySelectProps) {
   const refreshLobbies = () => {
     send({ clientMessageType: "lobbiesRequest" });
   }
+
+  const router = useRouter();
 
   useEffect(() => {
     if (lastMessage) {
@@ -44,7 +42,7 @@ export default function LobbySelect(props: LobbySelectProps) {
         break;
       case "lobbyJoined":
         console.log("lobbyJoined", data.lobbyId);
-        setPlayer({ ...player, inLobby: true });
+        router.push(`/${data.lobbyId}/welcome`);
         break;
       default:
         console.log("Unknown message type while in lobby select", data);

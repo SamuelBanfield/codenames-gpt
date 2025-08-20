@@ -1,7 +1,10 @@
 "use client";
 
+import { usePlayer } from "@/app/playerIdProvider";
+import { useWS } from "@/app/wsProvider";
+import { read } from "fs";
+import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { useWS } from "../wsProvider";
 
 export enum Role {
     redSpymaster,
@@ -12,46 +15,53 @@ export enum Role {
 
 export type Player = {
     name: string;
-    uuid: string | null;
-    ready: boolean;
-    inGame: boolean;
-    inLobby: boolean;
+    ready: boolean
     role: Role | null;
-};
+    inGame: boolean;
+}
 
-export default function Lobby(lobbyProps: { player: Player, setPlayer: (player: Player) => void }) {
+export type PreferencesUpdate = {
+    ready?: boolean;
+    role?: Role | null;
+}
 
-    const { player, setPlayer } = lobbyProps;
-    const [nameConfirmed, setNameConfirmed] = useState(false);
+export default function RoleSelect({ params }: { params: { lobbyId: string } }) {
 
+    const { playerId } = usePlayer();
+    const [player, setCurrentPlayer] = useState<Player>({
+        name: "",
+        ready: false,
+        role: null,
+        inGame: false
+    });
     const { send, lastMessage } = useWS();
+    const router = useRouter();
 
     const handleMessage = (data: any) => {
         console.log("message", data);
         switch (data.serverMessageType) {
             case "playerUpdate":
                 setPlayers(data.players);
-                const thisPlayer = data.players.find((p: Player) => p.uuid === player.uuid);
-                if (thisPlayer.name && thisPlayer.name.length > 0) {
-                    setNameConfirmed(true);
+                const thisPlayer = data.players.find((p: any) => p.uuid === playerId);
+                if (thisPlayer.inGame) {
+                    console.log(thisPlayer);
+                    router.push(`/${params.lobbyId}/game`);
                 }
-                setPlayer(data.players.find((p: Player) => p.uuid === player.uuid));
+                setCurrentPlayer({
+                    ...player,
+                    ready: thisPlayer?.ready ?? false,
+                    role: thisPlayer?.role ?? null
+                });
                 break;
             default:
                 console.log("Unknown message type while in lobby", data);
         }
     }
 
-    const [players, setPlayers] = useState<Player[]>([player]);
+    const [players, setPlayers] = useState<Player[]>([]);
 
-    const requestPreferences = (player: Player) => {
-        send({ clientMessageType: "preferencesRequest", player });
-    }
-
-    const [localName, setLocalName] = useState("");
-
-    const confirmName = () => {
-        requestPreferences({ ...player, name: localName });
+    const requestPreferences = (update: PreferencesUpdate) => {
+        send({ clientMessageType: "preferencesRequest", player: { ...update } });
     }
 
     useEffect(() => {
@@ -67,14 +77,6 @@ export default function Lobby(lobbyProps: { player: Player, setPlayer: (player: 
     return (
         <main className="flex min-h-screen flex-col items-center p-24">
             <h1 className="text-2xl font-bold py-2">Codenames GPT</h1>
-            <div className="mb-4 py-5">
-                <label htmlFor="name">Name: </label>
-                <input className="border p-1 rounded" type="text" value={localName} onChange={(e) => setLocalName(e.target.value)} disabled={nameConfirmed} />
-                {!nameConfirmed && <button onClick={confirmName} disabled={localName.length < 1} className={`${localName.length < 1 ? "bg-gray-200" : "bg-blue-200 hover:bg-blue-100"} ml-2 p-1 rounded`}>
-                    Enter lobby
-                </button>}
-            </div>
-            {nameConfirmed && 
             <div className="grid grid-cols-2 gap-4 mb-4">
                 <div className={`${playerWithRole(Role.redSpymaster)? "bg-red-100" : "bg-red-300 cursor-pointer hover:margin-2 hover:shadow-md transition duration-300"} p-6 justify-center rounded`} onClick={() => requestPreferences({...player, role: Role.redSpymaster})}>
                     <div>Red Spymaster</div>
@@ -92,17 +94,17 @@ export default function Lobby(lobbyProps: { player: Player, setPlayer: (player: 
                     Blue Player
                     <div className="text-s h-6"><i>{playerWithRole(Role.bluePlayer)?.name}</i></div>
                 </div>
-            </div>}
-            {nameConfirmed && <div className="flex items-center">
+            </div>
+            <div className="flex items-center">
                 <label htmlFor="ready" className="mr-2">Ready: </label>
                 <input
                     type="checkbox"
                     checked={player.ready}
-                    onChange={(e) => requestPreferences({ ...player, ready: e.target.checked })}
+                    onChange={(e) => requestPreferences({ ready: e.target.checked })}
                     className="form-checkbox h-5 w-5 text-blue-500"
                     disabled={player.role === null}
                 />
-            </div>}
+            </div>
         </main>
     );
 }

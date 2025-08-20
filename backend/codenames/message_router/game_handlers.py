@@ -12,8 +12,8 @@ class BaseGameHandler:
     def __init__(self, lobby_service: LobbyService):
         self.lobby_service = lobby_service
 
-    async def _validate_context(self, user_context: UserContext) -> Tuple[Optional[Dict[str, Any]], Optional[CodenamesGame]]:
-        """Common validation logic - returns (error_response, game)"""
+    async def _validate_context(self, user_context: UserContext) -> Tuple[Optional[Dict[str, Any]], Optional[Lobby]]:
+        """Common validation logic - returns (error_response, lobby)"""
         if not user_context.lobby_id:
             return {
                 "serverMessageType": "error",
@@ -26,36 +26,38 @@ class BaseGameHandler:
                 "serverMessageType": "error",
                 "message": "Lobby not found"
             }, None
-            
+
         if not lobby.game:
             return {
                 "serverMessageType": "error",
                 "message": "Game not found"
-            }, None
+            }, lobby
             
-        return None, lobby.game
+        return None, lobby
 
 
 class InitialiseGameHandler(BaseGameHandler):
     """Handle game initialization requests"""
 
     async def handle(self, user_context: UserContext, data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
-        error_response, game = await self._validate_context(user_context)
+        error_response, lobby = await self._validate_context(user_context)
         if error_response:
             return error_response
-        assert game is not None, "For type checking"
+        assert lobby is not None and lobby.game is not None, "For type checking"
+        if lobby and data.get("includeUserInfo"):
+            await lobby.send_player_update()
 
-        await game.broadcast_state_update(False)
+        await lobby.game.broadcast_state_update(False)
 
 
 class GuessTileHandler(BaseGameHandler):
     """Handle tile guesses"""
 
     async def handle(self, user_context: UserContext, data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
-        error_response, game = await self._validate_context(user_context)
+        error_response, lobby = await self._validate_context(user_context)
         if error_response:
             return error_response
-        assert game is not None, "For type checking"
+        assert lobby is not None and lobby.game is not None, "For type checking"
         
         word = data.get("word")
         if not word:
@@ -63,17 +65,17 @@ class GuessTileHandler(BaseGameHandler):
                 "serverMessageType": "error",
                 "message": "Missing word in guess"
             }
-        await game.guess_tile(user_context.user, get_tile_by_word(word, game.tiles))
+        await lobby.game.guess_tile(user_context.user, get_tile_by_word(word, lobby.game.tiles))
 
 
 class ProvideClueHandler(BaseGameHandler):
     """Handle clue provision"""
 
     async def handle(self, user_context: UserContext, data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
-        error_response, game = await self._validate_context(user_context)
+        error_response, lobby = await self._validate_context(user_context)
         if error_response:
             return error_response
-        assert game is not None, "For type checking"
+        assert lobby is not None and lobby.game is not None, "For type checking"
         
         word = data.get("word")
         number = data.get("number")
@@ -82,4 +84,4 @@ class ProvideClueHandler(BaseGameHandler):
                 "serverMessageType": "error",
                 "message": "Missing word or number in clue"
             }
-        await game.provide_clue(user_context.user, word, number)
+        await lobby.game.provide_clue(user_context.user, word, number)

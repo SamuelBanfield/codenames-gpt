@@ -1,8 +1,24 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Player, Role } from "./lobby";
-import { useWS } from "../wsProvider";
+import { useWS } from "../../wsProvider";
+import { usePlayer } from "@/app/playerIdProvider";
+
+export enum Role {
+    redSpymaster,
+    blueSpymaster,
+    redPlayer,
+    bluePlayer
+}
+
+export type Player = {
+    name: string;
+    uuid: string | null;
+    ready: boolean;
+    inGame: boolean;
+    inLobby: boolean;
+    role: Role | null;
+};
 
 const notRevealedColourMap = {
   "red": "bg-red-200",
@@ -33,9 +49,10 @@ const getTileColour = (tile: CodenamesTile): string => {
     : notRevealedColourMap[tile.team];
 }
 
-export default function GameComponent(gameProps: { player: Player}) {
+export default function GameComponent() {
 
-    const { player } = gameProps;
+    const { playerId } = usePlayer();
+    const [player, setPlayer] = useState<Player | null>(null);
 
     const [codenamesTiles, setCodenamesTiles] = useState<CodenamesTile[]>([]);
     const [codenamesClue, setCodenamesClue] = useState<CodenamesClue | null>(null);
@@ -61,6 +78,12 @@ export default function GameComponent(gameProps: { player: Player}) {
           }
           if (data.winner !== undefined) {
             setWinner(data.winner);
+          }
+          break;
+        case "playerUpdate":
+          const thisPlayer = data.players.find((p: any) => p.uuid === playerId);
+          if (thisPlayer) {
+            setPlayer(thisPlayer);
           }
           break;
         case "tilesUpdate":
@@ -126,13 +149,13 @@ export default function GameComponent(gameProps: { player: Player}) {
           {winner === null && <div className="flex flex-col items-center">
             {codenamesClue?.word && <h1 className="text-2xl font-bold m-2">{codenamesClue?.word}, {codenamesClue?.number}</h1>}
             <p className="m-2">{
-              player.role === onTurnRole 
+              player?.role === onTurnRole 
                 ? explanatoryText(player.role)
                 : (onTurnRole ? roleTurnToDisplayMap[onTurnRole] : "")}
                 </p>
             {(onTurnRole === Role.bluePlayer || onTurnRole === Role.redPlayer) && <p className="mb-4">Guesses remaining: {guessesRemaining}</p>}
             <p className="m-2">
-                You are on team {((player.role == Role.redSpymaster) || (player.role == Role.redPlayer)) ? "Red" : "Blue"}
+                You are on team {((player?.role == Role.redSpymaster) || (player?.role == Role.redPlayer)) ? "Red" : "Blue"}
             </p>
           </div>
           }
@@ -140,7 +163,7 @@ export default function GameComponent(gameProps: { player: Player}) {
           }
         </div>
         <div className="m-2">
-          {player.role === onTurnRole && (player.role === Role.redSpymaster || player.role === Role.blueSpymaster) && (
+          {player?.role === onTurnRole && (player?.role === Role.redSpymaster || player?.role === Role.blueSpymaster) && (
             <>
               <input
                 type="text"

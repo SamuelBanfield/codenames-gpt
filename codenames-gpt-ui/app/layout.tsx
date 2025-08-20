@@ -1,7 +1,8 @@
 import type { Metadata } from 'next'
-import { Inter } from 'next/font/google'
+import { Inter, Play } from 'next/font/google'
 import './globals.css'
 import { WebSocketProvider } from './wsProvider'
+import { PlayerProvider } from './playerIdProvider'
 
 const inter = Inter({ subsets: ['latin'] })
 
@@ -18,7 +19,11 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className={inter.className}>
-        <WebSocketProvider>{children}</WebSocketProvider>
+        <WebSocketProvider>
+          <PlayerProvider>
+            {children}
+          </PlayerProvider>
+        </WebSocketProvider>
       </body>
     </html>
   )

@@ -1,3 +1,4 @@
+from asyncio.log import logger
 from typing import Dict, Any, Optional
 
 from codenames.model import Role, User
@@ -26,8 +27,8 @@ class UpdatePreferencesHandler:
         user: User = user_context.user
         player_data = data.get("player", {})
         
-        user.name = player_data.get("name", user.name)
-        user.is_ready = player_data.get("ready", user.is_ready)
+        user.name = player_data.get("name", user.name) or user.name
+        user.is_ready = player_data.get("ready", user.is_ready) or user.is_ready
         if "role" in player_data and player_data["role"] is not None:
             index = int(player_data["role"])
             assigned_roles = lobby.get_role_assignments()
@@ -36,7 +37,9 @@ class UpdatePreferencesHandler:
                 user.team, user.is_spy_master = role.team, role.is_spymaster
 
         if all(user.is_ready for user in lobby.users if user.name):
+            logger.info("Starting game...")
             await lobby.start_game()
         else:
             await lobby.send_player_update()
+            
 

@@ -1,43 +1,20 @@
 "use client";
 
-import { useEffect, useState } from "react"
-import GameComponent from "./_components/gameComponent";
-import Lobby, { Player } from "./_components/lobby";
+import { useEffect } from "react"
 
-import LobbySelect from "./_components/lobbySelect";
+import LobbySelect from "./lobbySelect";
 import { useWS } from "./wsProvider";
-import { stat } from "fs";
+import { usePlayer } from "./playerIdProvider";
 
 export default function Home() {
 
-  const [player, setPlayer] = useState<Player>(
-    {
-      name: "",
-      uuid: null,
-      role: null,
-      ready: false,
-      inGame: false,
-      inLobby: false
-    }
-  );
-
   const { status, send, lastMessage } = useWS();
-
-  const handleIdMessage = (data: any) => {
-    if (data.serverMessageType === "idAssign") {
-      console.log("idAssign", data.uuid);
-      setPlayer({ ...player, uuid: data.uuid });
-      send({ clientMessageType: "lobbiesRequest" });
-    }
-    else {
-      console.log("Unknown message type for message", data);
-    }
-  }
+  const { playerId, setPlayerId } = usePlayer();
 
   useEffect(() => {
     if (lastMessage && lastMessage.serverMessageType === "idAssign") {
       console.log("idAssign", lastMessage.uuid);
-      setPlayer({ ...player, uuid: lastMessage.uuid });
+      setPlayerId(lastMessage.uuid);
       send({ clientMessageType: "lobbiesRequest" });
     }
     else {
@@ -49,26 +26,16 @@ export default function Home() {
     send({ clientMessageType: "idRequest" });
   }, [])
 
-  console.log("player", player);
-
-  if (status === "connecting" || player.uuid === null) {
+  if (status === "connecting" || playerId === null) {
     return <div>Connecting...</div>;
   }
 
   if (status === "closed") {
     return <div>Connection failed</div>;
   }
-  
-  if (player.inGame) {
-    return <GameComponent player={player} />;
-  }
-
-  if (player.inLobby) {
-    return <Lobby player={player} setPlayer={setPlayer} />;
-  }
 
   return (
-    <LobbySelect player={player} setPlayer={setPlayer} />
+    <LobbySelect />
   );
 }
 
