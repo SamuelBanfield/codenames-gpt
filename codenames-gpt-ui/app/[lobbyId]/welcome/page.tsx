@@ -52,13 +52,27 @@ export default function Home({ params }: { params: { lobbyId: string } }) {
 
     return (
         <main className="flex min-h-screen flex-col items-center p-24">
-            <h1 className="text-2xl font-bold py-2">Codenames GPT</h1>
-            <div className="mb-4 py-5">
-                <label htmlFor="name">Name: </label>
-                <input className="border p-1 rounded" type="text" value={localName} onChange={(e) => setLocalName(e.target.value)} disabled={nameConfirmed} />
-                <button onClick={confirmName} disabled={localName.length < 1} className={`${localName.length < 1 ? "bg-gray-200" : "bg-blue-200 hover:bg-blue-100"} ml-2 p-1 rounded`}>
-                    Enter lobby
-                </button>
+            <div className="max-w-md mx-auto bg-white rounded-lg shadow-lg p-3">
+            <label htmlFor="name" className="block text-sm font-medium mb-2">Name:</label>
+            <input 
+                type="text" 
+                value={localName} 
+                placeholder="Enter your name"
+                onChange={(e) => setLocalName(e.target.value)} 
+                disabled={nameConfirmed}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent mb-2"
+            />
+            <button 
+                onClick={confirmName} 
+                disabled={localName.length < 1} 
+                className={`w-full px-4 py-2 rounded-md transition-colors duration-200 font-medium ${
+                localName.length < 1 
+                    ? "bg-gray-300 text-gray-500 cursor-not-allowed" 
+                    : "bg-blue-500 hover:bg-blue-600 text-white"
+                }`}
+            >
+                Enter lobby
+            </button>
             </div>
         </main>
     );

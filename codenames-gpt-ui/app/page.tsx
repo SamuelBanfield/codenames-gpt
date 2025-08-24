@@ -50,6 +50,10 @@ export default function Home() {
 
   const handleMessage = (data: any) => {
     switch (data.serverMessageType) {
+      case "error":
+        console.error("Error from server:", data);
+        refreshLobbies();
+        break;
       case "idAssign":
         console.log("idAssign", data.uuid);
         setPlayerId(data.uuid);
@@ -82,61 +86,68 @@ export default function Home() {
   }
 
   return (
-    <div>
+    <div className="max-w-4xl mx-auto bg-white rounded-lg shadow-lg p-6">
       <div className="flex flex-col items-center">
-        <h1 className="text-2xl font-bold py-2">Codenames GPT</h1>
-        <p>Select one of the open lobbies below, or enter a name and click create to start your own</p>
-        <div className="flex mt-auto py-8">
-          <input 
-            type="text" 
-            placeholder="Lobby name" 
-            className="border p-1 rounded" 
-            value={lobbyName} 
-            onChange={(e) => setLobbyName(e.target.value)} 
-              />
-          <button 
-            className={`${lobbyName.length < 1 ? "bg-gray-200" : "bg-blue-200 hover:bg-blue-100"} ml-2 p-1 rounded"`}
-            onClick={() => createNewLobby(lobbyName)}
-            disabled={lobbyName.length < 1}
-              >
-                Create New Lobby
-            </button>
-          <button 
-            className="bg-blue-200 hover:bg-blue-100 ml-2 p-1 rounded" 
-            onClick={refreshLobbies}
-              >
-              Refresh lobbies
-          </button>
-        </div>
+      <p className="text-gray-600 mb-6">Select one of the open lobbies below, or enter a name and click create to start your own</p>
+      <div className="flex gap-2 mb-6 w-full max-w-md">
+        <input 
+        type="text" 
+        placeholder="Lobby name" 
+        className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent" 
+        value={lobbyName} 
+        onChange={(e) => setLobbyName(e.target.value)} 
+        />
+        <button 
+        className={`px-4 py-2 rounded-md transition-colors duration-200 font-medium ${
+          lobbyName.length < 1 
+          ? "bg-gray-300 text-gray-500 cursor-not-allowed" 
+          : "bg-blue-500 hover:bg-blue-600 text-white"
+        }`}
+        onClick={() => createNewLobby(lobbyName)}
+        disabled={lobbyName.length < 1}
+        >
+        Create
+        </button>
+        <button 
+        className="px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-md transition-colors duration-200 font-medium" 
+        onClick={refreshLobbies}
+        >
+        Refresh
+        </button>
       </div>
-      <table className="table-auto w-full mt-4">
-        <thead>
-          <tr>
-        <th className="px-4 py-2">Lobby Name</th>
-        <th className="px-4 py-2">Players</th>
-        <th className="px-4 py-2">Status</th>
-          </tr>
-        </thead>
-        <tbody>
-          {lobbies.map((lobby) => (
+      </div>
+      <table className="table-auto w-full border border-gray-300 rounded-md overflow-hidden">
+      <thead>
+        <tr className="bg-gray-50">
+        <th className="px-4 py-3 text-left font-medium text-gray-700 border-b border-gray-300">Lobby Name</th>
+        <th className="px-4 py-3 text-left font-medium text-gray-700 border-b border-gray-300">Players</th>
+        <th className="px-4 py-3 text-left font-medium text-gray-700 border-b border-gray-300">Status</th>
+        </tr>
+      </thead>
+      <tbody>
+        {lobbies.map((lobby) => (
         <tr 
-          className={`cursor-pointer ${lobbyStatus(lobby) === "Open" ? "hover:bg-gray-100" : "bg-gray-300"}`}
-          onClick={() => joinLobby(lobby.id)} 
+          className={`cursor-pointer transition-colors duration-200 ${
+          lobbyStatus(lobby) === "Open" 
+            ? "hover:bg-blue-50" 
+            : "bg-gray-100 cursor-not-allowed"
+          }`}
+          onClick={() => lobbyStatus(lobby) === "Open" && joinLobby(lobby.id)} 
           key={lobby.id}
         >
-          <td className="border border-black px-4 py-2">{lobby.name}</td>
-          <td className="border border-black px-4 py-2">{lobby.players}/4</td>
-          <td className="border border-black px-4 py-2">{lobbyStatus(lobby)}</td>
+          <td className="border-b border-gray-200 px-4 py-3">{lobby.name}</td>
+          <td className="border-b border-gray-200 px-4 py-3">{lobby.players}/4</td>
+          <td className="border-b border-gray-200 px-4 py-3">{lobbyStatus(lobby)}</td>
         </tr>
-          ))}
-          {Array.from({ length: Math.max(0, 10 - lobbies.length) }).map((_, index) => (
+        ))}
+        {Array.from({ length: Math.max(0, 10 - lobbies.length) }).map((_, index) => (
         <tr key={`empty-${index}`}>
-          <td className="border border-black px-4 py-2">&nbsp;</td>
-          <td className="border border-black px-4 py-2">&nbsp;</td>
-          <td className="border border-black px-4 py-2">&nbsp;</td>
+          <td className="border-b border-gray-200 px-4 py-3">&nbsp;</td>
+          <td className="border-b border-gray-200 px-4 py-3">&nbsp;</td>
+          <td className="border-b border-gray-200 px-4 py-3">&nbsp;</td>
         </tr>
-          ))}
-        </tbody>
+        ))}
+      </tbody>
       </table>
     </div>
   );

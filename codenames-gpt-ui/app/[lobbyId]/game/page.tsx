@@ -123,6 +123,12 @@ export default function GameComponent() {
       return "It's your turn, click on the word that links to the clue to guess";
     }
 
+    const getTurnText = () => {
+      return player?.role === onTurnRole 
+          ? explanatoryText(player.role)
+          : (onTurnRole ? roleTurnToDisplayMap[onTurnRole] : "")
+    }
+
     useEffect(() => {
       if (lastMessage) {
         handleMessage(lastMessage);
@@ -135,60 +141,73 @@ export default function GameComponent() {
   
     return (
       <main className="flex min-h-screen flex-col items-center p-12">
-        <h1 className="text-2xl font-bold py-4">Codenames GPT</h1>
-          <div className="grid grid-cols-5 gap-4">
+        <div className="grid grid-cols-5 gap-4">
           {codenamesTiles.map((tile: CodenamesTile, index: number) => (
-            <div
-              key={index}
-              className={`${tile.team === "assassin" ? "text-white" : "text-black"} ${getTileColour(tile)} p-4 text-center rounded ${!tile.revealed? "cursor-pointer hover:margin-2 hover:shadow-md transition duration-300" : ""}`}
-              onClick={() => {
-                if (!tile.revealed) {
-                  guessTile(tile)
-                }
-              }}
-            >
-              {tile.word}
-            </div>
+        <div
+          key={index}
+          className={`${tile.team === "assassin" ? "text-white" : "text-black"} ${getTileColour(tile)} p-4 text-center rounded-md ${!tile.revealed? "cursor-pointer hover:shadow-lg transition-all duration-200" : ""}`}
+          onClick={() => {
+            if (!tile.revealed) {
+              guessTile(tile)
+            }
+          }}
+        >
+          {tile.word}
+        </div>
           ))}
         </div>
         <div className="flex flex-col items-center h-50">
           {winner === null && <div className="flex flex-col items-center">
-            {codenamesClue?.word && <h1 className="text-2xl font-bold m-2">{codenamesClue?.word}, {codenamesClue?.number}</h1>}
-            <p className="m-2">{
-              player?.role === onTurnRole 
-                ? explanatoryText(player.role)
-                : (onTurnRole ? roleTurnToDisplayMap[onTurnRole] : "")}
-                </p>
-            {(onTurnRole === Role.bluePlayer || onTurnRole === Role.redPlayer) && <p className="mb-4">Guesses remaining: {guessesRemaining}</p>}
-            <p className="m-2">
-                You are on team {((player?.role == Role.redSpymaster) || (player?.role == Role.redPlayer)) ? "Red" : "Blue"}
-            </p>
+        {codenamesClue?.word && <h1 className="text-2xl font-bold m-2">{codenamesClue?.word}, {codenamesClue?.number}</h1>}
+        {getTurnText() && <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 m-2 max-w-lg text-center">
+          <p className="text-lg text-blue-800 font-medium">
+            {getTurnText()}
+          </p>
+        </div>}
+        {(onTurnRole === Role.bluePlayer || onTurnRole === Role.redPlayer) && 
+          <p className="mb-4 text-lg font-semibold text-gray-700">Guesses remaining: {guessesRemaining}</p>
+        }
+        <div className={`px-4 py-2 rounded-full font-semibold text-white m-2 ${
+          ((player?.role == Role.redSpymaster) || (player?.role == Role.redPlayer)) 
+            ? "bg-red-500" 
+            : "bg-blue-500"
+        }`}>
+          You are on team {((player?.role == Role.redSpymaster) || (player?.role == Role.redPlayer)) ? "Red" : "Blue"}
+        </div>
           </div>
           }
-          {(winner !== null) && <h1 className="m-2">Game over, the {winner} team has won!</h1>
+          {(winner !== null) && 
+        <div className="text-center m-2">
+          <h1 className="text-2xl font-bold text-gray-800 mb-2">Game Over. Team {winner.charAt(0).toUpperCase() + winner.slice(1)} Wins!</h1>
+        </div>
           }
         </div>
-        <div className="m-2">
-          {player?.role === onTurnRole && (player?.role === Role.redSpymaster || player?.role === Role.blueSpymaster) && (
-            <>
-              <input
-                type="text"
-                className="border p-1 rounded m-1"  
-                placeholder="Enter clue"
-                value={localClue ? localClue : ""}
-                onChange={(e) => setLocalClue(e.target.value)}
-              />
-              <input
-                type="number"
-                placeholder="Enter number"
-                value={localNumber ? localNumber : 0}
-                onChange={(e) => e.target.valueAsNumber >= 0 ? setLocalNumber(e.target.valueAsNumber) : 0}
-                className="border p-1 m-1 w-20"
-              />
-              <button onClick={provideClue} className={`${player.name.length < 1 ? "bg-gray-200" : "bg-blue-200 hover:bg-blue-100"} m-1 p-1 rounded`}>Submit Clue</button>
-            </>
-          )}
+        {player?.role === onTurnRole && (player?.role === Role.redSpymaster || player?.role === Role.blueSpymaster) && (
+        <div className="max-w-md mx-auto bg-white rounded-lg shadow-lg p-3">
+          <input
+            type="text"
+            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent mb-2"
+            placeholder="Enter clue"
+            value={localClue ? localClue : ""}
+            onChange={(e) => setLocalClue(e.target.value)}
+          />
+          <div className="flex gap-2">
+            <input
+              type="number"
+              placeholder="Enter number"
+              value={localNumber ? localNumber : 0}
+              onChange={(e) => e.target.valueAsNumber >= 0 ? setLocalNumber(e.target.valueAsNumber) : 0}
+              className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            />
+            <button 
+              onClick={provideClue} 
+              className="flex-shrink-0 px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-md transition-colors duration-200 font-medium"
+            >
+              Submit Clue
+            </button>
+          </div>
         </div>
+          )}
       </main>
     );
   }
