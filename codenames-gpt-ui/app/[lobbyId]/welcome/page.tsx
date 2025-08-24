@@ -18,6 +18,10 @@ export default function Home({ params }: { params: { lobbyId: string } }) {
     const handleMessage = (data: any) => {
         console.log("message", data);
         switch (data.serverMessageType) {
+            case "error":
+                console.error("Error from server:", data);
+                router.push("/error");
+                break;
             case "playerUpdate":
                 const thisPlayer = data.players.find((p: { uuid: string; name: string }) => p.uuid === playerId);
                 if (thisPlayer && thisPlayer.name && thisPlayer.name.length > 0) {

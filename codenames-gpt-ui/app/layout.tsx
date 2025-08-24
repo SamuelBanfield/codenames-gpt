@@ -3,6 +3,7 @@ import { Inter, Play } from 'next/font/google'
 import './globals.css'
 import { WebSocketProvider } from './wsProvider'
 import { PlayerProvider } from './playerIdProvider'
+import Header from './header'
 
 const inter = Inter({ subsets: ['latin'] })
 
@@ -21,6 +22,7 @@ export default function RootLayout({
       <body className={inter.className}>
         <WebSocketProvider>
           <PlayerProvider>
+            <Header />
             {children}
           </PlayerProvider>
         </WebSocketProvider>

@@ -40,6 +40,10 @@ export default function RoleSelect({ params }: { params: { lobbyId: string } }) 
     const handleMessage = (data: any) => {
         console.log("message", data);
         switch (data.serverMessageType) {
+            case "error":
+                console.error("Error from server:", data);
+                router.push("/error");
+                break;
             case "playerUpdate":
                 setPlayers(data.players);
                 const thisPlayer = data.players.find((p: any) => p.uuid === playerId);
@@ -63,6 +67,10 @@ export default function RoleSelect({ params }: { params: { lobbyId: string } }) 
     const requestPreferences = (update: PreferencesUpdate) => {
         send({ clientMessageType: "preferencesRequest", player: { ...update } });
     }
+
+    useEffect(() => {
+        requestPreferences({});
+    }, []);
 
     useEffect(() => {
         if (lastMessage) {

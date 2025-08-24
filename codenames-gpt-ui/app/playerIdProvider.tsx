@@ -5,11 +5,13 @@ import React, { createContext, useContext, useEffect, useState } from 'react';
 type PlayerCtx = {
   playerId: string | null;
   setPlayerId: (id: string) => void;
+  resetPlayerId: () => void;
 };
 
 const Ctx = createContext<PlayerCtx>({
   playerId: null,
   setPlayerId: () => {},
+  resetPlayerId: () => {},
 });
 
 export function PlayerProvider({ children }: { children: React.ReactNode }) {
@@ -25,7 +27,12 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     localStorage.setItem('playerId', id);
   };
 
-  return <Ctx.Provider value={{ playerId, setPlayerId }}>{children}</Ctx.Provider>;
+  const resetPlayerId = () => {
+    _setPlayerId(null);
+    localStorage.removeItem('playerId');
+  };
+
+  return <Ctx.Provider value={{ playerId, setPlayerId, resetPlayerId }}>{children}</Ctx.Provider>;
 }
 
 export const usePlayer = () => useContext(Ctx);

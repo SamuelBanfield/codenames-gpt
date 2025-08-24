@@ -14,13 +14,15 @@ type WSMessage = any;
 type WSContextType = {
   status: WSStatus;
   send: (msg: Outbound) => void;
-  lastMessage?: WSMessage
+  lastMessage?: WSMessage,
+  disconnect: () => void;
 };
 
 const WSContext = createContext<WSContextType>({
   status: 'closed',
   send: () => {},
   lastMessage: undefined,
+  disconnect: () => {},
 });
 
 export function WebSocketProvider({ children }: { children: React.ReactNode }) {
@@ -78,8 +80,16 @@ export function WebSocketProvider({ children }: { children: React.ReactNode }) {
       queueRef.current.push(msg);
     }
   };
+
+  const disconnect = () => {
+    if (wsRef.current) {
+      wsRef.current.close();
+      wsRef.current = null;
+    }
+  };
+
   return (
-    <WSContext.Provider value={{ status, send, lastMessage }}>
+    <WSContext.Provider value={{ status, send, lastMessage, disconnect }}>
       {children}
     </WSContext.Provider>
   );

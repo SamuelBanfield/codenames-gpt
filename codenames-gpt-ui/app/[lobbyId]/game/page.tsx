@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useWS } from "../../wsProvider";
 import { usePlayer } from "@/app/playerIdProvider";
+import { useRouter } from "next/navigation";
 
 export enum Role {
     redSpymaster,
@@ -66,9 +67,14 @@ export default function GameComponent() {
     const [winner, setWinner] = useState<string | null>(null);
 
     const { send, lastMessage } = useWS();
+    const router = useRouter();
 
     const handleMessage = (data: any) => {
       switch (data.serverMessageType) {
+        case "error":
+          console.error("Error from server:", data);
+          router.push("/error");
+          break;
         case "stateUpdate":
           setCodenamesTiles(data.tiles);
           setCodenamesClue({word: data.clue?.word, number: data.clue?.number});
