@@ -15,13 +15,13 @@ class UpdatePreferencesHandler:
     async def handle(self, user_context: UserContext, data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         if not user_context.lobby_id:
             return {
-                "serverMessageType": "error",
+                "serverMessageType": "stateError",
                 "message": "User not in a lobby"
             }
         lobby: Optional[Lobby] = await self.lobby_service.get_lobby(user_context.lobby_id)
         if not lobby:
             return {
-                "serverMessageType": "error",
+                "serverMessageType": "stateError",
                 "message": "Lobby not found"
             }
         user: User = user_context.user

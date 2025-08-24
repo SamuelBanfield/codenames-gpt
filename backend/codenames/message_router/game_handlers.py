@@ -16,20 +16,20 @@ class BaseGameHandler:
         """Common validation logic - returns (error_response, lobby)"""
         if not user_context.lobby_id:
             return {
-                "serverMessageType": "error",
+                "serverMessageType": "stateError",
                 "message": "User not in a lobby"
             }, None
             
         lobby: Optional[Lobby] = await self.lobby_service.get_lobby(user_context.lobby_id)
         if not lobby:
             return {
-                "serverMessageType": "error",
+                "serverMessageType": "stateError",
                 "message": "Lobby not found"
             }, None
 
         if not lobby.game:
             return {
-                "serverMessageType": "error",
+                "serverMessageType": "stateError",
                 "message": "Game not found"
             }, lobby
             

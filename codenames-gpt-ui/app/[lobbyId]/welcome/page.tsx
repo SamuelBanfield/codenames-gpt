@@ -18,7 +18,7 @@ export default function Home({ params }: { params: { lobbyId: string } }) {
     const handleMessage = (data: any) => {
         console.log("message", data);
         switch (data.serverMessageType) {
-            case "error":
+            case "stateError":
                 console.error("Error from server:", data);
                 router.push("/error");
                 break;
