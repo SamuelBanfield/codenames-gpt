@@ -95,7 +95,7 @@ export default function GameComponent() {
 
     useEffect(() => {
       send({ clientMessageType: "initialiseRequest", includeUserInfo: true });
-    }, [send]);
+    }, []);
   
     return (
       <main className="flex min-h-screen flex-col items-center p-12">

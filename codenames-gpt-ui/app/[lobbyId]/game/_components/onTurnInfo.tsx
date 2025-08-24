@@ -32,7 +32,7 @@ export default function OnTurnInfo({ winner, codenamesClue, onTurnRole, guessesR
     const getTurnText = () => {
         return player?.role === onTurnRole 
             ? explanatoryText(player.role)
-            : (onTurnRole ? roleTurnToDisplayMap[onTurnRole] : "")
+            : (onTurnRole !== null ? roleTurnToDisplayMap[onTurnRole] : "")
     }
     
     

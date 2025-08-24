@@ -65,7 +65,7 @@ export default function Home() {
         break;
       case "lobbyJoined":
         console.log("lobbyJoined", data.lobbyId);
-        router.push(`/${data.lobbyId}/welcome`);
+        router.replace(`/${data.lobbyId}/welcome`);
         break;
       default:
         console.log("Unknown message type while in lobby select", data);
