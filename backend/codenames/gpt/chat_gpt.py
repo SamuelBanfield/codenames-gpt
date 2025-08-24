@@ -4,7 +4,7 @@ import logging
 from typing import List, Tuple
 
 from codenames.model import CodenamesConnection
-from codenames.options import OPEN_AI_KEY, GPT_MODEL, VERBOSE_LOGGING
+from codenames.options import OPEN_AI_KEY, GPT_MODEL
 
 SYSTEM_PROMPT_CLUE = (
     "You are playing codenames and it's your turn to give a clue. "

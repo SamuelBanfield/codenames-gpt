@@ -20,8 +20,6 @@ If you are a guesser, try to guess the word's linking to the clue supplied.  If 
 
 To run the backend, create a `backend/.properties.json` file containing the following properties:
 
-* host - The host
-* websocketPort - The port
 * openaiKey - An open AI key
 * gptModel - Which model to use, e.g. `gpt-4o`
 * guessDelay - (Optional) The time in seconds that the AI will delay before supplying a clue or guess. The AI will otherwise play incomprehinsibly quickly
@@ -30,6 +28,12 @@ Then the server can be start using:
 
 ```sh
 python run.py
+```
+
+or run as a docker image:
+```sh
+docker build -t codenames-backend .
+docker run -e OPENAI_KEY="<key>" -p 8000:8000 codenames-backend
 ```
 
 The front expects a similar `codenames-gpt-ui/.properties.json` file containing the following properties:

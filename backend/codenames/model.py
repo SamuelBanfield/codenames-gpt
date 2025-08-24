@@ -1,7 +1,7 @@
 from enum import Enum
+import logging
 from typing import Optional
 import uuid
-from codenames.options import VERBOSE_LOGGING
 
 
 class Role(Enum):
@@ -64,8 +64,7 @@ class User:
         self.is_human: bool = is_human
 
     async def send(self, message: dict):
-        if VERBOSE_LOGGING:
-            print(f"Sending message to {self.name}: {message['serverMessageType']}")
+        logging.info(f"Sending message to {self.name}: {message['serverMessageType']}")
         await self.connection.send(message)
 
     def to_json(self) -> dict:
