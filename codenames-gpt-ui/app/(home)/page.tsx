@@ -2,7 +2,7 @@
 
 import { usePlayer } from "../playerIdProvider";
 import CreateLobbyForm from "./_components/createLobbyForm";
-import LobbyTable from "./_components/LobbyTable";
+import LobbyTable from "./_components/lobbyTable";
 import { useLobbySelectLogic } from "./hooks/useLobbySelectLogic";
 
 export default function Home() {

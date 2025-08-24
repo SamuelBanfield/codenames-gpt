@@ -27,19 +27,32 @@ To run the backend, create a `backend/.properties.json` file containing the foll
 Then the server can be start using:
 
 ```sh
+cd backend
 python run.py
 ```
 
 or run as a docker image:
+
 ```sh
+cd backend
 docker build -t codenames-backend .
 docker run -e OPENAI_KEY="<key>" -p 8000:8000 codenames-backend
 ```
 
-The front expects a similar `codenames-gpt-ui/.properties.json` file containing the following properties:
+The UI can be started with:
 
-* host - The host
-* websocketPort - The port
+```sh
+cd codenames-gpt-ui
+npx next dev
+```
+
+or run as a docker image:
+
+```sh
+cd codenames-gpt-ui
+docker build -t codenames-ui .
+docker run -e NEXT_PUBLIC_WEBSOCKET_URL="<url>" -p 3000:3000 codenames-ui
+```
 
 ## Contact
 

@@ -36,7 +36,8 @@ export function WebSocketProvider({ children }: { children: React.ReactNode }) {
     let closedByApp = false;
 
     const connect = () => {
-      const ws = new WebSocket(`ws://${options.host}:${options.websocketPort}/`);
+      const wsUrl = process.env.NEXT_PUBLIC_WEBSOCKET_URL || 'ws://localhost:7999';
+      const ws = new WebSocket(`${wsUrl}/`);
       wsRef.current = ws;
       setStatus('connecting');
 
@@ -49,8 +50,12 @@ export function WebSocketProvider({ children }: { children: React.ReactNode }) {
       };
 
       ws.onmessage = (ev) => {
-        const data = JSON.parse(ev.data);
-        setLastMessage(data);
+        try {
+          const data = JSON.parse(ev.data);
+          setLastMessage(data);
+        } catch (error) {
+          console.error("Failed to parse WebSocket message:", error, ev.data);
+        }
       };
 
       ws.onclose = () => {
