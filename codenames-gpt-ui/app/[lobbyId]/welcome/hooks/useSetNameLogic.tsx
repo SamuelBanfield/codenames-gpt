@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { useWS } from "../../../wsProvider";
 import { usePlayer } from "@/app/playerIdProvider";
 
-export function useJoinLobby(lobbyId: string) {
+export function useSetNameLogic(lobbyId: string) {
   const { send, lastMessage } = useWS();
   const { playerId } = usePlayer();
   const router = useRouter();

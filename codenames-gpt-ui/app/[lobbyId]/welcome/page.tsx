@@ -1,18 +1,12 @@
 "use client";
 
-import { use, useEffect, useState } from "react"
+import { useState } from "react"
 
-import { useWS } from "../../wsProvider";
-import { useRouter } from "next/navigation";
-import { usePlayer } from "@/app/playerIdProvider";
 import NameForm from "./_components/nameForm";
-import { useJoinLobby } from "./hooks/useJoinLobby";
+import { useSetNameLogic } from "./hooks/useSetNameLogic";
 
 export default function Home({ params }: { params: { lobbyId: string } }) {
-    const { send, lastMessage } = useWS();
-
-
-    const { nameConfirmed, confirmName } = useJoinLobby(params.lobbyId);
+    const { nameConfirmed, confirmName } = useSetNameLogic(params.lobbyId);
 
     const [localName, setLocalName] = useState("");
 

@@ -1,6 +1,6 @@
 "use client"
 
-import { Player, Role } from "../page";
+import { Player, Role } from "../types";
 
 export type OnTurnInfoProps = {
     winner: string | null;
