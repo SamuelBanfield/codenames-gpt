@@ -56,7 +56,25 @@ docker run -e NEXT_PUBLIC_WEBSOCKET_URL="<url>" -p 3000:3000 codenames-ui
 
 ## Tests
 
-See [TESTING.md](TESTING.md) for setup, commands, and reproduction coverage for the nine code-review findings. The reproduction tests intentionally fail until those bugs are fixed.
+Use Python 3.12 and Node.js 20.19+ (or 22.12+). Tests mock OpenAI and do not require a real API key or a running server.
+
+From `backend/`:
+
+```sh
+python -m pip install -r requirements-dev.txt
+python -m pytest
+```
+
+From `codenames-gpt-ui/`:
+
+```sh
+npm ci
+npm test
+```
+
+The frontend port-contract test requires `python` on PATH; set `PYTHON` to another executable, such as `python3`, if needed.
+
+Some regression tests intentionally fail until the reproduced bugs are fixed.
 
 ## Contact
 
