@@ -54,6 +54,10 @@ docker build -t codenames-ui .
 docker run -e NEXT_PUBLIC_WEBSOCKET_URL="<url>" -p 3000:3000 codenames-ui
 ```
 
+## Tests
+
+See [TESTING.md](TESTING.md) for setup, commands, and reproduction coverage for the nine code-review findings. The reproduction tests intentionally fail until those bugs are fixed.
+
 ## Contact
 
 For any questions or suggestions, please open an issue or contact me
