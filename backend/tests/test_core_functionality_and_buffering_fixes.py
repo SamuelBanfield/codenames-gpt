@@ -115,8 +115,8 @@ class TestCoreFunctionalityAndBufferingFixes:
             await asyncio.sleep(0.1)
             return []  # No guesses to avoid complexity
 
-        with patch('codenames.gpt.agent.ChatGPT.get_clue', side_effect=mock_get_clue), \
-             patch('codenames.gpt.agent.ChatGPT.guess', side_effect=mock_make_guesses):
+        with patch('codenames.gpt.chat_gpt.ChatGPT.get_clue', side_effect=mock_get_clue), \
+             patch('codenames.gpt.chat_gpt.ChatGPT.guess', side_effect=mock_make_guesses):
             
             # Start the game (triggers AI)
             game_start_task = asyncio.create_task(lobby.start_game())
@@ -167,8 +167,8 @@ class TestCoreFunctionalityAndBufferingFixes:
             await asyncio.sleep(0.05)
             return []  # No guesses to keep it simple
 
-        with patch('codenames.gpt.agent.ChatGPT.get_clue', side_effect=mock_get_clue), \
-             patch('codenames.gpt.agent.ChatGPT.guess', side_effect=mock_make_guesses):
+        with patch('codenames.gpt.chat_gpt.ChatGPT.get_clue', side_effect=mock_get_clue), \
+             patch('codenames.gpt.chat_gpt.ChatGPT.guess', side_effect=mock_make_guesses):
             
             # Start game and verify it completes without hanging
             start_time = asyncio.get_event_loop().time()
