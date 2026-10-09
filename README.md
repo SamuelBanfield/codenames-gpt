@@ -18,6 +18,20 @@ If you are a guesser, try to guess the word's linking to the clue supplied.  If 
 
 ## Setup
 
+### One-command local development
+
+With Python 3.12+ and Node.js 20.19+ (or 22.12+) installed, run from the repository root:
+
+```sh
+python dev.py
+```
+
+The launcher installs dependencies on first run, starts both servers, and opens **http://localhost:3000/codenames**. Later runs reuse the installed dependencies unless their requirements change. Press **Ctrl+C** to stop both servers.
+
+It uses `OPENAI_KEY` or the existing `backend/.properties.json`. If neither supplies a key, it prompts once and saves it in that Git-ignored local configuration. Use `python dev.py --no-browser` to skip opening a browser, or `--port 3001 --backend-port 8001` if the default ports are occupied.
+
+### Manual setup
+
 To run the backend, create a `backend/.properties.json` file containing the following properties:
 
 * openaiKey - An open AI key
@@ -57,6 +71,12 @@ docker run -e NEXT_PUBLIC_WEBSOCKET_URL="<url>" -p 3000:3000 codenames-ui
 ## Tests
 
 Use Python 3.12 and Node.js 20.19+ (or 22.12+). Tests mock OpenAI and do not require a real API key or a running server.
+
+Launcher tests, from the repository root:
+
+```sh
+python -m unittest discover -s tests -v
+```
 
 From `backend/`:
 
