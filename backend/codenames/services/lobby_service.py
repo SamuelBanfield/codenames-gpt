@@ -64,6 +64,7 @@ class LobbyService:
     
     async def create_lobby(self, owner: User, name: str) -> Lobby:
         """Create a new lobby with the given owner and name"""
+        await self._leave_previous_lobbies(owner)
         lobby = Lobby(owner, name)
         await self.repository.create_lobby(lobby)
         return lobby
@@ -74,6 +75,8 @@ class LobbyService:
         if not lobby:
             logger.warning(f"Attempt to join non-existent lobby: {lobby_id}")
             return None
+        if user in lobby.users:
+            return lobby
         
         if lobby.game is not None:
             logger.info(f"Cannot join lobby {lobby_id}: game already started")
@@ -83,6 +86,12 @@ class LobbyService:
             logger.info(f"Cannot join lobby {lobby_id}: lobby is full")
             return None
         
+        await self._leave_previous_lobbies(user)
+        # Leaving an old game can await broadcasts/disposal. Revalidate the
+        # destination after that suspension before occupying its last slot.
+        lobby = await self.repository.get_lobby(lobby_id)
+        if not lobby or lobby.game is not None or len(lobby.users) >= 4:
+            return None
         lobby.add_user(user)
         await self.repository.update_lobby(lobby)
         logger.info(f"User {user.name} joined lobby {lobby_id}")
@@ -94,16 +103,37 @@ class LobbyService:
         if not lobby:
             return
         
-        try:
-            lobby.users.remove(user)
-            await self.repository.update_lobby(lobby)
-            
-            # Clean up empty lobbies with no human players
-            if not any(u.is_human for u in lobby.users):
-                await self.repository.delete_lobby(lobby_id)
-                logger.info(f"Cleaned up empty lobby {lobby_id}")
-        except ValueError:
+        if user not in lobby.users:
             logger.debug(f"User {user.connection.uuid} was not in lobby {lobby_id}")
+            return
+        lobby.users = [other for other in lobby.users if other is not user]
+        lobby.revision += 1
+        humans_remain = any(other.is_human for other in lobby.users)
+        if lobby.game:
+            await lobby.game.remove_user(user, replace_with_ai=humans_remain)
+        user.in_lobby = user.in_game = user.is_ready = False
+        user.team = None
+        user.is_spy_master = False
+        if not humans_remain:
+            if lobby.game:
+                await lobby.game.dispose()
+            await self.repository.delete_lobby(lobby_id)
+        else:
+            if lobby.lobby_owner is user:
+                lobby.lobby_owner = next(other for other in lobby.users if other.is_human)
+            await self.repository.update_lobby(lobby)
+            if lobby.ready_to_start():
+                await lobby.start_game()
+            else:
+                await lobby.send_player_update()
+
+    async def _leave_previous_lobbies(self, user: User):
+        memberships = [lobby for lobby in await self.repository.list_lobbies() if user in lobby.users]
+        if memberships or user.in_game:
+            for lobby in memberships:
+                await self.leave_lobby(user, str(lobby.id))
+            user.in_lobby = user.in_game = user.is_ready = user.is_spy_master = False
+            user.team = None
     
     async def get_available_lobbies(self) -> List[Lobby]:
         """Get all lobbies that can be joined"""

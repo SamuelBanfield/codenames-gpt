@@ -6,7 +6,7 @@ import NameForm from "./_components/nameForm";
 import { useSetNameLogic } from "./hooks/useSetNameLogic";
 
 export default function Home({ params }: { params: { lobbyId: string } }) {
-    const { nameConfirmed, confirmName } = useSetNameLogic(params.lobbyId);
+    const { nameConfirmed, confirmName, error, status } = useSetNameLogic(params.lobbyId);
 
     const [localName, setLocalName] = useState("");
 
@@ -17,7 +17,10 @@ export default function Home({ params }: { params: { lobbyId: string } }) {
                 setLocalName={setLocalName}
                 nameConfirmed={nameConfirmed}
                 confirmName={confirmName}
+                disabled={status !== 'open'}
             />
+            {error && <p role="alert">{error}</p>}
+            {status !== 'open' && <p role="status">{status === 'closed' ? 'Connection lost. Reload to reconnect.' : 'Connecting…'}</p>}
         </main>
     );
 }

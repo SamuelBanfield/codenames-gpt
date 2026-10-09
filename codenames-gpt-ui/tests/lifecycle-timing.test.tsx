@@ -263,4 +263,108 @@ describe("endgame and route timing reproductions", () => {
       clientMessageType: "preferencesRequest", player: { role: 0 },
     });
   });
+
+  it("ignores an older revision and an obsolete game ID", () => {
+    const { result } = renderHook(useWS, { wrapper: Wrapper });
+    const socket = currentSocket();
+    act(() => socket.open());
+    act(() => socket.receive({ ...snapshot(), gameId: "current", revision: 5 }));
+
+    act(() => socket.receive({ ...snapshot(), gameId: "current", revision: 4 }));
+    expect(result.current.lastMessage.revision).toBe(5);
+    act(() => socket.receive({ ...snapshot(), gameId: "obsolete", revision: 99 }));
+    expect(result.current.lastMessage.gameId).toBe("current");
+  });
+
+  it("binds actions to the current game and turn and prevents a second pending guess", () => {
+    const view = render(<Wrapper><GamePage /></Wrapper>);
+    const socket = currentSocket();
+    act(() => socket.open());
+    act(() => socket.receive({ ...snapshot(), gameId: "game-one", turnId: 12, revision: 4 }));
+    socket.send.mockClear();
+
+    fireEvent.click(view.getByText("UNREVEALED"));
+    fireEvent.click(view.getByText("UNREVEALED"));
+
+    expect(socket.messages()).toEqual([{
+      clientMessageType: "guessTile", word: "UNREVEALED", gameId: "game-one", turnId: 12,
+    }]);
+    expect(view.getByRole("status").textContent).toContain("Sending action");
+  });
+
+  it("offers an explicit retry for failed AI clues", () => {
+    const view = render(<Wrapper><GamePage /></Wrapper>);
+    const socket = currentSocket();
+    act(() => socket.open());
+    act(() => socket.receive({
+      ...snapshot({ role: 1, onTurnRole: 0 }), gameId: "game-one", turnId: 0, aiError: "AI unavailable",
+    }));
+    socket.send.mockClear();
+
+    fireEvent.click(view.getByRole("button", { name: "Retry AI turn" }));
+
+    expect(socket.messages()).toEqual([{ clientMessageType: "retryAI", gameId: "game-one", turnId: 0 }]);
+  });
+
+  it("leaves the finished room before returning to lobby selection", () => {
+    const view = render(<Wrapper><GamePage /></Wrapper>);
+    const socket = currentSocket();
+    act(() => socket.open());
+    act(() => socket.receive(snapshot({ winner: "red" })));
+    socket.send.mockClear();
+
+    fireEvent.click(view.getByRole("button", { name: "Return to lobby selection" }));
+    expect(socket.messages()[0].clientMessageType).toBe("leaveLobby");
+    expect(session.router.replace).not.toHaveBeenCalled();
+    act(() => socket.receive({ serverMessageType: "lobbyLeft" }));
+
+    expect(session.router.replace).toHaveBeenCalledWith("/");
+  });
+
+  it("disables gameplay after connection loss", () => {
+    const view = render(<Wrapper><GamePage /></Wrapper>);
+    const socket = currentSocket();
+    act(() => socket.open());
+    act(() => socket.receive(snapshot()));
+    act(() => socket.disconnect());
+    socket.send.mockClear();
+
+    const tile = view.getByText("UNREVEALED") as HTMLButtonElement;
+    expect(tile.disabled).toBe(true);
+    fireEvent.click(tile);
+    expect(socket.send).not.toHaveBeenCalled();
+    expect(view.getByRole("alert").textContent).toContain("Connection lost");
+  });
+
+  it("prevents repeated lobby creation while waiting for a response", () => {
+    const view = render(<Wrapper><HomePage /></Wrapper>);
+    const socket = currentSocket();
+    act(() => socket.open());
+    fireEvent.change(view.getByPlaceholderText("Lobby name"), { target: { value: "New room" } });
+    socket.send.mockClear();
+
+    fireEvent.click(view.getByRole("button", { name: "Create" }));
+    fireEvent.click(view.getByRole("button", { name: "Create" }));
+
+    expect(socket.messages()).toEqual([{ clientMessageType: "createLobby", name: "New room" }]);
+    act(() => socket.receive({ serverMessageType: "error", message: "Creation failed" }));
+    expect((view.getByRole("button", { name: "Create" }) as HTMLButtonElement).disabled).toBe(false);
+  });
+
+  it("rejects late rosters from a previous room and older rosters from the current room", () => {
+    const { result } = renderHook(useWS, { wrapper: Wrapper });
+    const socket = currentSocket();
+    act(() => socket.open());
+    act(() => socket.receive({ serverMessageType: 'lobbyJoined', lobbyId: 'first' }));
+    act(() => socket.receive({ ...roster(), lobbyId: 'first', lobbyRevision: 4 }));
+    act(() => socket.receive({ serverMessageType: 'lobbyJoined', lobbyId: 'second' }));
+
+    act(() => socket.receive({ ...roster(), lobbyId: 'first', lobbyRevision: 99 }));
+    expect(result.current.session?.players).toBeUndefined();
+    act(() => socket.receive({ ...roster(), lobbyId: 'second', lobbyRevision: 3 }));
+    act(() => socket.receive({ ...roster(1), lobbyId: 'second', lobbyRevision: 2 }));
+
+    expect(result.current.session?.players?.[0].role).toBe(2);
+    expect(result.current.session?.lobbyRevision).toBe(3);
+  });
 });

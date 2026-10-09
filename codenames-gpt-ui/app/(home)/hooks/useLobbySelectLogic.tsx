@@ -3,34 +3,44 @@
 import { usePlayer } from "@/app/playerIdProvider";
 import { useWS } from "@/app/wsProvider";
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Lobby } from "../types";
+import { useScopedSend, useServerMessages } from "@/app/hooks/useServerMessages";
 
 export function useLobbySelectLogic() {
   
-    const { status, send, lastMessage } = useWS();
+    const { status } = useWS();
+    const send = useScopedSend();
     const { setPlayerId } = usePlayer();
     const router = useRouter();
     
     const [lobbies, setLobbies] = useState<Lobby[]>([]);
+    const [pending, setPending] = useState(false);
+    const pendingRef = useRef(false);
+    const [error, setError] = useState<string | null>(null);
   
     useEffect(() => {
       send({ clientMessageType: "idRequest" });
-    }, [])
+    }, [send])
   
     const createNewLobby = (name: string) => {
-      send({ clientMessageType: "createLobby", name });
+      if (status !== 'open' || pendingRef.current || !name.trim()) return;
+      pendingRef.current = true;
+      setPending(true);
+      setError(null);
+      send({ clientMessageType: "createLobby", name: name.trim() });
     };
   
-    const refreshLobbies = () => {
+    const refreshLobbies = useCallback(() => {
       send({ clientMessageType: "lobbiesRequest" });
-    }
+    }, [send]);
   
     const handleMessage = useCallback((data: any) => {
       switch (data.serverMessageType) {
         case "error":
-          console.error("Error from server:", data);
-          refreshLobbies();
+          setError(data.message);
+          pendingRef.current = false;
+          setPending(false);
           break;
         case "idAssign":
           console.log("idAssign", data.uuid);
@@ -42,21 +52,23 @@ export function useLobbySelectLogic() {
           setLobbies(data.lobbies);
           break;
         case "lobbyJoined":
+          pendingRef.current = false;
+          setPending(false);
           console.log("lobbyJoined", data.lobbyId);
           router.replace(`/${data.lobbyId}/welcome`);
           break;
         default:
           console.log("Unknown message type while in lobby select", data);
       }
-    }, [refreshLobbies, router, send, setLobbies, setPlayerId]);
+    }, [refreshLobbies, router, setPlayerId]);
 
-    useEffect(() => {
-      if (lastMessage) {
-        handleMessage(lastMessage);
-      }
-    }, [lastMessage, handleMessage]);
+    useServerMessages(handleMessage);
   
     const joinLobby = (lobbyId: string) => {
+      if (status !== 'open' || pendingRef.current) return;
+      pendingRef.current = true;
+      setPending(true);
+      setError(null);
       send({ clientMessageType: "joinLobby", lobbyId });
     }
 
@@ -65,7 +77,9 @@ export function useLobbySelectLogic() {
       lobbies,
       createNewLobby,
       refreshLobbies,
-      joinLobby
+      joinLobby,
+      pending,
+      error,
     };
   
 }

@@ -25,23 +25,26 @@ const getTileColour = (tile: CodenamesTile): string => {
 export type GridProps = {
     codenamesTiles: CodenamesTile[];
     guessTile: (tile: CodenamesTile) => void;
+    enabled?: boolean;
 };
 
-export default function GridComponent({ codenamesTiles, guessTile }: GridProps) {
+export default function GridComponent({ codenamesTiles, guessTile, enabled = true }: GridProps) {
     return (
         <div className="grid grid-cols-5 gap-4">
             {codenamesTiles.map((tile: CodenamesTile, index: number) => (
-                <div
+                <button
+                    type="button"
+                    disabled={!enabled || tile.revealed}
                     key={index}
-                    className={`${tile.team === "assassin" ? "text-white" : "text-black"} ${getTileColour(tile)} p-4 text-center rounded-md ${!tile.revealed? "cursor-pointer hover:shadow-lg transition-all duration-200" : ""}`}
+                    className={`${tile.team === "assassin" ? "text-white" : "text-black"} ${getTileColour(tile)} p-4 text-center rounded-md ${enabled && !tile.revealed? "cursor-pointer hover:shadow-lg transition-all duration-200" : ""}`}
                     onClick={() => {
-                        if (!tile.revealed) {
+                        if (enabled && !tile.revealed) {
                             guessTile(tile)
                         }
                     }}
                 >
                     {tile.word}
-                </div>
+                </button>
             ))}
         </div>
     );

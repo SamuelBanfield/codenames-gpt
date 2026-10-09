@@ -16,6 +16,8 @@ If you are a Spy Master, on your turn you must select a word that links to as ma
 
 If you are a guesser, try to guess the word's linking to the clue supplied.  If you guess wrong, or you run out of guesses your turn will end.
 
+Finished games stay read-only until players leave using **Return to lobby selection**. If a human leaves an active game, AI takes over their role while other humans remain. The lobby and its AI work are cleaned up when the last human leaves. Failed AI clue requests can be retried using **Retry AI turn**.
+
 ## Setup
 
 To run the backend, create a `backend/.properties.json` file containing the following properties:
@@ -74,7 +76,7 @@ npm test
 
 The frontend port-contract test requires `python` on PATH; set `PYTHON` to another executable, such as `python3`, if needed.
 
-Some regression tests intentionally fail until the reproduced bugs are fixed.
+The regression suites cover game lifecycle, validation, and UI message timing.
 
 ## Contact
 

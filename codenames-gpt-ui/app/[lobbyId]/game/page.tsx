@@ -3,7 +3,6 @@
 import GridComponent from "./_components/grid";
 import ClueForm from "./_components/clueForm";
 import OnTurnInfo from "./_components/onTurnInfo";
-import { Role } from "./types";
 import { useThings as useGameLogic } from "./hooks/useGameLogic";
 
 export default function GameComponent() {
@@ -16,6 +15,14 @@ export default function GameComponent() {
       player,
       winner,
       codenamesClue,
+      canGuess,
+      canClue,
+      pending,
+      error,
+      canRetryAI,
+      retryAI,
+      status,
+      leaveGame,
     } = useGameLogic();
 
     return (
@@ -23,6 +30,7 @@ export default function GameComponent() {
         <GridComponent 
           codenamesTiles={codenamesTiles} 
           guessTile={guessTile} 
+          enabled={canGuess}
         />
         <div className="flex flex-col items-center h-50">
           <OnTurnInfo 
@@ -33,9 +41,15 @@ export default function GameComponent() {
             player={player} 
           />
         </div>
-        {player?.role === onTurnRole && (player?.role === Role.redSpymaster || player?.role === Role.blueSpymaster) && (
+        {error && <p role="alert" className="text-red-700 m-3">{error}</p>}
+        {status === 'closed' && <p role="alert">Connection lost. Reload the page to reconnect.</p>}
+        {pending && <p role="status">Sending action…</p>}
+        {canRetryAI && <button type="button" onClick={retryAI} disabled={pending}>Retry AI turn</button>}
+        {winner && <button type="button" onClick={leaveGame} disabled={pending || status !== 'open'}>Return to lobby selection</button>}
+        {canClue && (
           <ClueForm
             onSubmit={provideClue}
+            disabled={pending}
           />
         )}
       </main>

@@ -4,9 +4,10 @@ import { useState } from "react";
 
 export type ClueFormProps = {
     onSubmit: (clue: string | null, number: number | null) => void;
+    disabled?: boolean;
 };
 
-export default function ClueForm({onSubmit }: ClueFormProps) {
+export default function ClueForm({onSubmit, disabled = false }: ClueFormProps) {
       
   const [localClue, setLocalClue] = useState<string>("");
   const [localNumber, setLocalNumber] = useState<number>(0);
@@ -27,6 +28,9 @@ export default function ClueForm({onSubmit }: ClueFormProps) {
       <div className="flex gap-2">
         <input
           type="number"
+          min={1}
+          max={25}
+          step={1}
           placeholder="Enter number"
           value={localNumber ? localNumber : 0}
           onChange={(e) => setLocalNumber(e.target.valueAsNumber >= 0 ? e.target.valueAsNumber : 0)}
@@ -34,6 +38,7 @@ export default function ClueForm({onSubmit }: ClueFormProps) {
         />
         <button 
           onClick={handleSubmit}
+          disabled={disabled}
           className="flex-shrink-0 px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-md transition-colors duration-200 font-medium"
         >
           Submit Clue
