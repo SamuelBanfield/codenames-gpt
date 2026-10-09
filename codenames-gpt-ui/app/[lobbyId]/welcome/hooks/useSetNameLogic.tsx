@@ -1,12 +1,14 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useWS } from "../../../wsProvider";
 import { usePlayer } from "@/app/playerIdProvider";
+import { useScopedSend, useServerMessages } from "@/app/hooks/useServerMessages";
 
 export function useSetNameLogic(lobbyId: string) {
-  const { send, lastMessage } = useWS();
+  const { session, status } = useWS();
+  const send = useScopedSend();
   const { playerId } = usePlayer();
   const router = useRouter();
 
@@ -22,7 +24,7 @@ export function useSetNameLogic(lobbyId: string) {
         const thisPlayer = data.players.find((p: { uuid: string; name?: string }) => p.uuid === playerId);
         if (thisPlayer?.name && thisPlayer.name.length > 0) {
           setNameConfirmed(true);
-          router.replace(`/${lobbyId}/lobby`);
+          router.replace(`/${lobbyId}/${thisPlayer.inGame ? 'game' : 'lobby'}`);
         }
         break;
       }
@@ -31,17 +33,16 @@ export function useSetNameLogic(lobbyId: string) {
     }
   }, [playerId, router, lobbyId]);
 
+  useServerMessages(handleMessage);
   useEffect(() => {
-    if (lastMessage) {
-        handleMessage(lastMessage);
-    }
-  }, [lastMessage, handleMessage]);
+    if (session?.players) handleMessage({ serverMessageType: 'playerUpdate', players: session.players });
+  }, [session?.players, handleMessage]);
 
   const confirmName = useCallback((name: string) => {
     const trimmed = name.trim();
-    if (!trimmed) return;
+    if (!trimmed || status !== 'open' || session?.game) return;
     send({ clientMessageType: "preferencesRequest", player: { name: trimmed } });
-  }, [send]);
+  }, [send, status, session?.game]);
 
-  return { nameConfirmed, confirmName };
+  return { nameConfirmed, confirmName, error: session?.error?.message, status };
 }

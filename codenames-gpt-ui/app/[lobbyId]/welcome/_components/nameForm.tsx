@@ -5,9 +5,10 @@ type NameFormProps = {
     setLocalName: (name: string) => void;
     nameConfirmed: boolean;
     confirmName: (name: string) => void;
+    disabled?: boolean;
 }
 
-export default function NameForm({ localName, setLocalName, nameConfirmed, confirmName }: NameFormProps) {
+export default function NameForm({ localName, setLocalName, nameConfirmed, confirmName, disabled = false }: NameFormProps) {
 
     return (
         <div className="max-w-md mx-auto bg-white rounded-lg shadow-lg p-3">
@@ -22,7 +23,7 @@ export default function NameForm({ localName, setLocalName, nameConfirmed, confi
             />
             <button 
                 onClick={() => confirmName(localName)} 
-                disabled={localName.length < 1} 
+                disabled={disabled || nameConfirmed || !localName.trim()}
                 className={`w-full px-4 py-2 rounded-md transition-colors duration-200 font-medium ${
                 localName.length < 1 
                     ? "bg-gray-300 text-gray-500 cursor-not-allowed" 

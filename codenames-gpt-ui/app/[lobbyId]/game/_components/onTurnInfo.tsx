@@ -59,9 +59,9 @@ export default function OnTurnInfo({ winner, codenamesClue, onTurnRole, guessesR
                 <div className={`px-4 py-2 rounded-full font-semibold text-white m-2 ${
                     ((player?.role == Role.redSpymaster) || (player?.role == Role.redPlayer)) 
                         ? "bg-red-500" 
-                        : "bg-blue-500"
+                        : player?.role == null ? "bg-gray-500" : "bg-blue-500"
                 }`}>
-                    You are on team {((player?.role == Role.redSpymaster) || (player?.role == Role.redPlayer)) ? "Red" : "Blue"}
+                    {player?.role == null ? "Waiting for player information" : `You are on team ${((player.role == Role.redSpymaster) || (player.role == Role.redPlayer)) ? "Red" : "Blue"}`}
                 </div>
             </div>
         </>

@@ -1,7 +1,6 @@
 """Regression specifications for findings 1-7 from the code review.
 
-These tests intentionally assert the desired behavior, rather than accepting the
-bugs as correct. They are expected to fail until the application is fixed.
+These tests preserve the expected behavior for the bugs identified in the review.
 """
 
 from unittest.mock import AsyncMock

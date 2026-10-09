@@ -25,18 +25,40 @@ class UpdatePreferencesHandler:
                 "message": "Lobby not found"
             }
         user: User = user_context.user
+        if user not in lobby.users:
+            return {"serverMessageType": "stateError", "message": "User not in this lobby"}
         player_data = data.get("player", {})
-        
-        user.name = player_data.get("name", user.name) or user.name
-        user.is_ready = player_data.get("ready", user.is_ready) or user.is_ready
+        if not isinstance(player_data, dict):
+            raise ValueError("Player preferences must be an object")
+        if lobby.game:
+            if player_data:
+                return {"serverMessageType": "error", "message": "Preferences cannot change after game startup"}
+            await lobby.send_player_update()
+            return
+        if "name" in player_data and (not isinstance(player_data["name"], str) or not player_data["name"].strip()):
+            raise ValueError("Name must be a nonempty string")
+        if "ready" in player_data and type(player_data["ready"]) is not bool:
+            raise ValueError("Ready must be a boolean")
+        role = None
         if "role" in player_data and player_data["role"] is not None:
-            index = int(player_data["role"])
-            assigned_roles = lobby.get_role_assignments()
-            if index not in assigned_roles:
-                role = Role.from_index(index)
-                user.team, user.is_spy_master = role.team, role.is_spymaster
+            index = player_data["role"]
+            if type(index) is not int:
+                raise ValueError("Role must be an integer")
+            role = Role.from_index(index)
+            if any(other is not user and (other.team, other.is_spy_master) == role.value for other in lobby.users):
+                raise ValueError("Role is already occupied")
+        if "name" in player_data:
+            user.name = player_data["name"].strip()
+        if "ready" in player_data:
+            user.is_ready = player_data["ready"]
+        if role:
+            if (user.team, user.is_spy_master) != role.value and "ready" not in player_data:
+                user.is_ready = False
+            user.team, user.is_spy_master = role.value
+        if player_data:
+            lobby.revision += 1
 
-        if all(user.is_ready for user in lobby.users if user.name):
+        if lobby.ready_to_start():
             logger.info("Starting game...")
             await lobby.start_game()
         else:

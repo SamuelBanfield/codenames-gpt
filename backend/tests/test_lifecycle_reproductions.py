@@ -1,7 +1,7 @@
 """Endgame and late-request regression specifications, plus passing controls.
 
-Reproductions assert correct behavior and intentionally fail until fixed. Events
-hold specific API/send boundaries so concurrency cases do not depend on timing.
+Regressions assert correct behavior. Events hold specific API/send boundaries so
+concurrency cases do not depend on timing.
 """
 
 import asyncio
@@ -484,3 +484,197 @@ async def test_control_same_connection_waits_for_prior_response_delivery(service
     release.set()
     await asyncio.wait_for(task, timeout=2)
     assert routed == ["idRequest", "lobbiesRequest"]
+
+
+@pytest.mark.parametrize("role", [Role.RED_SPYMASTER, Role.RED_OPERATIVE])
+async def test_departed_on_turn_human_is_replaced_by_ai_and_play_resumes(service, tasks, role):
+    departed = make_user("Departed", role)
+    humans = [departed] + [make_user(other.name, other) for other in Role if other != role]
+    lobby = await start_room(service, humans)
+    game = lobby.game
+    if not role.is_spymaster:
+        await game.provide_clue(game.get_on_turn_user(), "CLUE", 2)
+    turn = game.turn_id
+    requested, release = asyncio.Event(), asyncio.Event()
+
+    async def held_response(*args):
+        requested.set()
+        await release.wait()
+        return ("TAKEOVER", 1) if role.is_spymaster else ["RED1"]
+
+    agent = game.clue_service.gpt_agent
+    (agent.provide_clue if role.is_spymaster else agent.make_guesses).side_effect = held_response
+    departed.connection.send.reset_mock()
+    with capture_game_tasks(tasks):
+        await service.leave_lobby(departed, str(lobby.id))
+    await checkpoint(requested)
+    replacement = game.get_on_turn_user()
+    assert not replacement.is_human
+    assert (replacement.team, replacement.is_spy_master) == role.value
+    assert game.turn_id > turn
+    assert departed not in game.users and departed not in lobby.users
+    departed.connection.send.assert_not_awaited()
+
+    release.set()
+    await asyncio.wait_for(asyncio.gather(*tasks), timeout=2)
+    assert game.get_on_turn_user().is_human
+    if role.is_spymaster:
+        assert game.current_turn == Role.RED_OPERATIVE
+        assert game.clue == ("TAKEOVER", 1)
+    else:
+        assert game.current_turn == Role.BLUE_SPYMASTER
+        assert game.tiles[0].revealed
+
+
+async def test_finished_game_departure_does_not_create_an_ai_replacement(service):
+    humans = [make_user(role.name, role) for role in Role]
+    lobby = await start_room(service, humans)
+    game = lobby.game
+    operative, tile, _ = prepare_terminal_guess(game, "red", "own")
+    await game.guess_tile(operative, tile)
+
+    await service.leave_lobby(humans[0], str(lobby.id))
+
+    assert game.check_win() == "red"
+    assert len(game.users) == 3
+    assert all(user.is_human for user in game.users)
+    assert not game._tasks
+
+
+async def test_human_can_retry_a_failed_ai_clue_and_resume_the_game(service, tasks):
+    owner = make_user("Owner", Role.BLUE_SPYMASTER)
+    operative = make_user("Human operative", Role.RED_OPERATIVE)
+    with capture_game_tasks(tasks):
+        lobby = await start_room(service, [owner, operative])
+    game = lobby.game
+    game.clue_service.gpt_agent.provide_clue.side_effect = [RuntimeError("temporary failure"), ("RECOVERED", 1)]
+    await asyncio.wait_for(asyncio.gather(*tasks), timeout=2)
+    assert game.ai_error is not None
+    assert game.current_turn == Role.RED_SPYMASTER
+
+    with capture_game_tasks(tasks):
+        await MessageRouter(service).route_message(context_for(owner, lobby), "retryAI", {
+            "gameId": game.id, "turnId": game.turn_id,
+        })
+    await asyncio.wait_for(asyncio.gather(*tasks), timeout=2)
+
+    assert game.ai_error is None
+    assert game.clue == ("RECOVERED", 1)
+    assert game.get_on_turn_user() is operative
+    assert game.clue_service.gpt_agent.provide_clue.await_count == 2
+
+
+async def test_command_from_an_earlier_matching_role_turn_is_rejected(make_game, service):
+    game = make_game()
+    owner = game.get_on_turn_user()
+    lobby = await service.create_lobby(owner, "Turn versions")
+    lobby.game = game
+    stale = {"gameId": game.id, "turnId": game.turn_id, "word": "OLD", "number": 1}
+    await game.provide_clue(owner, "RED", 1)
+    await game.pass_turn(game.get_on_turn_user())
+    await game.provide_clue(game.get_on_turn_user(), "BLUE", 1)
+    await game.pass_turn(game.get_on_turn_user())
+    assert game.get_on_turn_user() is owner
+    before = game.get_state_update(owner, False)
+
+    response = await MessageRouter(service).route_message(context_for(owner, lobby), "provideClue", stale)
+
+    assert response["serverMessageType"] == "error"
+    assert game.get_state_update(owner, False) == before
+
+
+async def test_join_revalidates_capacity_after_waiting_for_old_lobby_cleanup(service, tasks):
+    moving = make_user("Moving", Role.RED_SPYMASTER)
+    remaining = make_user("Remaining", Role.BLUE_SPYMASTER)
+    old = await start_room(service, [moving, remaining])
+    for tile in old.game.tiles:
+        if tile.team == "red":
+            tile.reveal()
+    destination = await service.create_lobby(make_user("Destination owner"), "Destination")
+    for name in ("Second", "Third"):
+        await service.join_lobby(make_user(name), str(destination.id))
+    sending, release = asyncio.Event(), asyncio.Event()
+
+    async def hold_cleanup(message):
+        sending.set()
+        await release.wait()
+
+    remaining.connection.send.side_effect = hold_cleanup
+    context = context_for(moving, old)
+    task = asyncio.create_task(MessageRouter(service).route_message(
+        context, "joinLobby", {"lobbyId": str(destination.id)}
+    ))
+    tasks.append(task)
+    await checkpoint(sending)
+    assert await service.join_lobby(make_user("Last slot"), str(destination.id)) is destination
+    release.set()
+    response = await asyncio.wait_for(task, timeout=2)
+
+    assert len(destination.users) == 4
+    assert moving not in destination.users
+    assert context.lobby_id is None
+    assert response["serverMessageType"] == "error"
+
+
+async def test_explicit_leave_retires_a_finished_room_and_is_idempotent(service):
+    owner = make_user("Owner", Role.RED_SPYMASTER)
+    lobby = await start_room(service, [owner])
+    for tile in lobby.game.tiles:
+        if tile.team == "red":
+            tile.reveal()
+    context = context_for(owner, lobby)
+    router = MessageRouter(service)
+
+    assert await router.route_message(context, "leaveLobby", {}) == {"serverMessageType": "lobbyLeft"}
+    assert context.lobby_id is None
+    assert await service.get_lobby(str(lobby.id)) is None
+    assert lobby.game.disposed
+    assert owner.in_game is False and owner.is_ready is False and owner.team is None
+    assert await router.route_message(context, "leaveLobby", {}) == {"serverMessageType": "lobbyLeft"}
+
+
+async def test_ai_takeover_during_startup_is_scheduled_when_activation_completes(service, tasks):
+    departing = make_user("Departing", Role.RED_SPYMASTER)
+    remaining = make_user("Remaining", Role.RED_OPERATIVE)
+    lobby = await service.create_lobby(departing, "Startup takeover")
+    await service.join_lobby(remaining, str(lobby.id))
+    sending, release = asyncio.Event(), asyncio.Event()
+
+    async def hold_startup(message):
+        sending.set()
+        await release.wait()
+
+    departing.connection.send.side_effect = hold_startup
+    startup = asyncio.create_task(lobby.start_game())
+    tasks.append(startup)
+    await checkpoint(sending)
+    game = lobby.game
+    assert not game.started
+    game.clue_service.gpt_agent.provide_clue.return_value = ("STARTUP", 1)
+
+    await service.leave_lobby(departing, str(lobby.id))
+    assert not game.get_on_turn_user().is_human
+    with capture_game_tasks(tasks):
+        release.set()
+        await asyncio.wait_for(startup, timeout=2)
+    await asyncio.wait_for(asyncio.gather(*tasks), timeout=2)
+
+    assert game.started
+    game.clue_service.gpt_agent.provide_clue.assert_awaited_once()
+    assert game.get_on_turn_user() is remaining
+    assert game.clue == ("STARTUP", 1)
+
+
+async def test_waiting_room_starts_when_the_only_unready_human_leaves(service):
+    ready = make_user("Ready", Role.RED_SPYMASTER)
+    ready.is_ready = True
+    unready = make_user("Unready", Role.BLUE_SPYMASTER)
+    lobby = await service.create_lobby(ready, "Ready after departure")
+    await service.join_lobby(unready, str(lobby.id))
+    assert lobby.game is None
+
+    await service.leave_lobby(unready, str(lobby.id))
+
+    assert lobby.game is not None
+    assert lobby.game.started
+    assert lobby.game.get_on_turn_user() is ready

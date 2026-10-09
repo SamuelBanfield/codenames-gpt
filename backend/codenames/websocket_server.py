@@ -96,7 +96,11 @@ class WebSocketServer:
             await self._send_error(user_context, "Invalid JSON format")
             return
         
-        if message_type := message_data.get("clientMessageType"):
+        if not isinstance(message_data, dict):
+            await self._send_error(user_context, "Message must be a JSON object")
+            return
+        message_type = message_data.get("clientMessageType")
+        if isinstance(message_type, str) and message_type:
             logger.info(f"Received message from {user_context.connection_id}: {message_data}")
             if response := await self.message_router.route_message(user_context, message_type, message_data):
                 if connection := self.connection_manager.get_connection(user_context.connection_id):
@@ -115,11 +119,12 @@ class WebSocketServer:
 
     async def _cleanup_connection(self, user_context: UserContext) -> None:
         """Clean up when a connection is closed"""
-        if user_context and user_context.lobby_id:
-            await self.lobby_service.leave_lobby(user_context.user, user_context.lobby_id)
-
-        self.connection_manager.remove_connection(user_context.connection_id)
-        logger.info(f"Cleaned up connection {user_context.connection_id}")
+        try:
+            if user_context.lobby_id:
+                await self.lobby_service.leave_lobby(user_context.user, user_context.lobby_id)
+        finally:
+            self.connection_manager.remove_connection(user_context.connection_id)
+            logger.info(f"Cleaned up connection {user_context.connection_id}")
 
 async def create_server() -> WebSocketServer:
     """Factory function to create a properly configured server"""

@@ -5,9 +5,10 @@ import { useState } from "react";
 type CreateLobbyFormProps = {
     createNewLobby: (name: string) => void;
     refreshLobbies: () => void;
+    disabled?: boolean;
 }
 
-export default function CreateLobbyForm({ createNewLobby, refreshLobbies }: CreateLobbyFormProps) {
+export default function CreateLobbyForm({ createNewLobby, refreshLobbies, disabled = false }: CreateLobbyFormProps) {
 
     const [lobbyName, setLobbyName] = useState("");
 
@@ -27,7 +28,7 @@ export default function CreateLobbyForm({ createNewLobby, refreshLobbies }: Crea
                 : "bg-blue-500 hover:bg-blue-600 text-white"
             }`}
             onClick={() => createNewLobby(lobbyName)}
-            disabled={lobbyName.length < 1}
+            disabled={disabled || !lobbyName.trim()}
           >
             Create
           </button>
