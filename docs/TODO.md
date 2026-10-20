@@ -34,7 +34,7 @@
 
 ## Endgame and timing bugs
 
-- [x] Fix the backend lifecycle reproductions in [test_lifecycle_reproductions.py](backend/tests/test_lifecycle_reproductions.py):
+- [x] Fix the backend lifecycle reproductions in [test_lifecycle_reproductions.py](../backend/tests/test_lifecycle_reproductions.py):
   - [x] Winning guesses schedule another AI clue request: final own-team tile, opponent's final tile, and assassin, for either team.
   - [x] Clue generation requests AI output before checking whether the game is finished.
   - [x] AI guess loops continue submitting ignored guesses after victory.
@@ -48,7 +48,7 @@
   - [x] Creating or joining a new lobby after completion retains readiness and in-game flags.
   - [x] Name confirmation in a new room starts a game using readiness from the previous game.
   - [x] Post-start role preferences can claim an AI-filled role and expose hidden tile teams.
-- [x] Fix the frontend lifecycle reproductions in [lifecycle-timing.test.tsx](codenames-gpt-ui/tests/lifecycle-timing.test.tsx):
+- [x] Fix the frontend lifecycle reproductions in [lifecycle-timing.test.tsx](../codenames-gpt-ui/tests/lifecycle-timing.test.tsx):
   - [x] Batched roster/state delivery leaves the game without its current player.
   - [x] Batched startup messages leave the UI on the lobby screen.
   - [x] Full game snapshots do not update the current player from their roster.

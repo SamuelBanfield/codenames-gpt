@@ -8,6 +8,8 @@ A [demo](https://sambanfield.com/codenames/) is available.
 
 The repository contains both the backend python websocket server, and the NextJS front end.
 
+See [Documentation](docs/README.md) for the architecture overview, prioritized issues, TODO, and implementation plans.
+
 ## How to play
 
 To begin, either create or join a lobby then select a team and role. Once all human players in the lobby have selected a role and clicked, ready the game will begin and any open roles will be filled in by the AI.

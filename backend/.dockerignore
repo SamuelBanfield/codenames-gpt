@@ -1,0 +1,37 @@
+# Local credentials and environment configuration
+**/.properties.json
+**/.env
+**/.env.*
+**/*.pem
+**/*.key
+**/*.p12
+**/*.pfx
+
+# Local Python environments and generated files
+**/.venv
+**/venv
+**/env
+**/__pycache__
+**/*.py[cod]
+**/*.egg-info
+**/build
+**/dist
+
+# Tests, tooling caches, and reports
+**/tests
+**/test_*.py
+**/pytest.ini
+requirements-dev.txt
+**/.pytest_cache
+**/.cache
+**/.mypy_cache
+**/.ruff_cache
+**/.coverage*
+**/coverage.xml
+**/htmlcov
+**/*.log
+
+# Version-control and editor metadata
+**/.git
+**/.idea
+**/.vscode

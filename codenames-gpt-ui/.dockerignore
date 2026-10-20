@@ -1,0 +1,28 @@
+# Local credentials and environment configuration
+**/.properties.json
+**/.env
+**/.env.*
+**/*.pem
+**/*.key
+**/*.p12
+**/*.pfx
+
+# Host-installed dependencies and generated output
+**/node_modules
+**/.next
+**/out
+**/build
+**/dist
+**/*.tsbuildinfo
+
+# Tests, tooling caches, and reports
+**/tests
+**/coverage
+**/.cache
+**/.eslintcache
+**/*.log
+
+# Version-control and editor metadata
+**/.git
+**/.idea
+**/.vscode
