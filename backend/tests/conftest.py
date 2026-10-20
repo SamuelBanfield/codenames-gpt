@@ -14,3 +14,9 @@ os.environ["OPENAI_KEY"] = "test-key-not-a-real-credential"
 def offline_openai():
     with patch("codenames.gpt.chat_gpt.openai.AsyncOpenAI"):
         yield
+
+
+@pytest.fixture(autouse=True)
+def sessions():
+    from tests.helpers import reset_connections
+    reset_connections()

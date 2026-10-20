@@ -1,5 +1,4 @@
 from enum import Enum
-import logging
 from typing import Optional
 import uuid
 
@@ -38,43 +37,31 @@ class Role(Enum):
             return roles[index]
         raise ValueError(f"Invalid role index: {index}")
     
-    @classmethod
-    def all_roles(cls) -> list['Role']:
-        return list(cls)
-
-
-class CodenamesConnection:
-    def __init__(self):
-        self.uuid = uuid.uuid4()
-
-    async def send(self, message: dict):
-        raise NotImplementedError("Subclasses must implement this method")
-
-
 class User:
-    """Model of a user in the game"""
-    def __init__(self, connection: CodenamesConnection, is_human: bool):
-        self.name: str = ""
-        self.connection: CodenamesConnection = connection
-        self.is_spy_master: bool = False
+    """Player identity and preferences, independent of any transport."""
+    def __init__(self, is_human: bool = True, role: Optional[Role] = None):
+        self.id = str(uuid.uuid4())
+        self.name = ""
+        self.role = role
         self.is_ready: bool = False
-        self.in_game: bool = False
-        self.in_lobby: bool = False
-        self.team: Optional[str] = None
         self.is_human: bool = is_human
 
-    async def send(self, message: dict):
-        logging.info(f"Sending message to {self.name}: {message['serverMessageType']}")
-        await self.connection.send(message)
+    @property
+    def team(self) -> Optional[str]:
+        return self.role.team if self.role else None
 
-    def to_json(self) -> dict:
+    @property
+    def is_spy_master(self) -> bool:
+        return self.role.is_spymaster if self.role else False
+
+    def to_json(self, *, in_lobby: bool = False, in_game: bool = False) -> dict:
         return {
             "name": self.name,
-            "uuid": str(self.connection.uuid),
+            "uuid": self.id,
             "ready": self.is_ready,
-            "inGame": self.in_game,
-            "inLobby": self.in_lobby,
-            "role": Role.from_team_and_role(self.team, self.is_spy_master).index if self.team else None
+            "inGame": in_game,
+            "inLobby": in_lobby,
+            "role": self.role.index if self.role else None,
         }
 
 class Tile:

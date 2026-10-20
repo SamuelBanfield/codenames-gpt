@@ -3,7 +3,7 @@ import openai
 import logging
 from typing import List, Tuple
 
-from codenames.model import CodenamesConnection
+from codenames.model import Tile, User
 from codenames.options import OPEN_AI_KEY, GPT_MODEL
 
 SYSTEM_PROMPT_CLUE = (
@@ -17,15 +17,21 @@ SYSTEM_PROMPT_GUESS = (
 )
 
 
-class GPTConnection(CodenamesConnection):
-    
-    async def send(self, message: dict):
-        '''No op for AI'''
-        return
-
 class ChatGPT:
     def __init__(self):
         self.client = openai.AsyncOpenAI(api_key=OPEN_AI_KEY)
+
+    async def close(self):
+        await self.client.close()
+
+    async def provide_clue(self, user: User, tiles: List[Tile]) -> Tuple[str, int]:
+        return await self.get_clue(
+            [tile.word for tile in tiles if tile.team == user.team and not tile.revealed],
+            [tile.word for tile in tiles if tile.team != user.team and not tile.revealed],
+        )
+
+    async def make_guesses(self, word: str, number: int, tiles: List[Tile]) -> List[str]:
+        return await self.guess((word, number), [tile.word for tile in tiles if not tile.revealed])
 
     async def get_clue(self, words_to_guess: List[str], words_to_avoid: List[str]) -> Tuple[str, int]:
         logging.debug(f"Getting clue from GPT to link {words_to_guess}")

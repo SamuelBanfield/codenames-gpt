@@ -3,7 +3,12 @@ import logging
 from abc import ABC, abstractmethod
 
 from codenames.lobby import Lobby
-from codenames.model import User
+from codenames.model import Role, User
+from codenames.game.factory import GameFactory
+from codenames.game.runtime import GameRuntime
+from codenames.gpt.chat_gpt import ChatGPT
+from codenames.options import GUESS_DELAY
+from codenames.services.connection_service import ConnectionManager
 
 logger = logging.getLogger(__name__)
 
@@ -59,13 +64,23 @@ class InMemoryLobbyRepository(LobbyRepository):
 class LobbyService:
     """Domain service for lobby operations"""
     
-    def __init__(self, repository: LobbyRepository):
+    def __init__(self, repository: LobbyRepository, connections: ConnectionManager,
+                 ai_factory=ChatGPT, guess_delay: float = GUESS_DELAY):
         self.repository = repository
+        self.connections = connections
+        self.ai_factory = ai_factory
+        self.guess_delay = guess_delay
+
+    def _set_membership(self, user: User, lobby_id: Optional[str]):
+        session = self.connections.get_session(user.id)
+        if session:
+            session.lobby_id = lobby_id
     
     async def create_lobby(self, owner: User, name: str) -> Lobby:
         """Create a new lobby with the given owner and name"""
         await self._leave_previous_lobbies(owner)
         lobby = Lobby(owner, name)
+        self._set_membership(owner, lobby.id)
         await self.repository.create_lobby(lobby)
         return lobby
     
@@ -76,6 +91,7 @@ class LobbyService:
             logger.warning(f"Attempt to join non-existent lobby: {lobby_id}")
             return None
         if user in lobby.users:
+            self._set_membership(user, lobby.id)
             return lobby
         
         if lobby.game is not None:
@@ -92,7 +108,9 @@ class LobbyService:
         lobby = await self.repository.get_lobby(lobby_id)
         if not lobby or lobby.game is not None or len(lobby.users) >= 4:
             return None
-        lobby.add_user(user)
+        lobby.users.append(user)
+        lobby.revision += 1
+        self._set_membership(user, lobby.id)
         await self.repository.update_lobby(lobby)
         logger.info(f"User {user.name} joined lobby {lobby_id}")
         return lobby
@@ -104,36 +122,102 @@ class LobbyService:
             return
         
         if user not in lobby.users:
-            logger.debug(f"User {user.connection.uuid} was not in lobby {lobby_id}")
+            logger.debug("User %s was not in lobby %s", user.id, lobby_id)
             return
         lobby.users = [other for other in lobby.users if other is not user]
         lobby.revision += 1
         humans_remain = any(other.is_human for other in lobby.users)
+        on_turn = False
         if lobby.game:
-            await lobby.game.remove_user(user, replace_with_ai=humans_remain)
-        user.in_lobby = user.in_game = user.is_ready = False
-        user.team = None
-        user.is_spy_master = False
+            on_turn = lobby.game.remove_user(user, replace_with_ai=humans_remain)
+        self._set_membership(user, None)
+        user.is_ready = False
+        user.role = None
         if not humans_remain:
+            # Remove the room before awaiting cancellation/client shutdown.
+            await self.repository.delete_lobby(lobby_id)
             if lobby.game:
                 await lobby.game.dispose()
-            await self.repository.delete_lobby(lobby_id)
         else:
             if lobby.lobby_owner is user:
                 lobby.lobby_owner = next(other for other in lobby.users if other.is_human)
             await self.repository.update_lobby(lobby)
+            if lobby.game:
+                turn = lobby.game.state.turn_id
+                await lobby.game.broadcast_state_update(False)
+                if on_turn:
+                    lobby.game.schedule_ai_turn(turn)
             if lobby.ready_to_start():
-                await lobby.start_game()
+                await self.start_game(lobby)
             else:
-                await lobby.send_player_update()
+                await self.send_player_update(lobby)
 
     async def _leave_previous_lobbies(self, user: User):
         memberships = [lobby for lobby in await self.repository.list_lobbies() if user in lobby.users]
-        if memberships or user.in_game:
+        if memberships:
             for lobby in memberships:
                 await self.leave_lobby(user, str(lobby.id))
-            user.in_lobby = user.in_game = user.is_ready = user.is_spy_master = False
-            user.team = None
+            user.is_ready = False
+            user.role = None
+
+    async def send_player_update(self, lobby: Lobby):
+        message = lobby.get_player_update()
+        await self.connections.broadcast(lobby.users, lambda user: message)
+
+    async def start_game(self, lobby: Lobby):
+        if lobby.game is not None:
+            return
+        game = GameRuntime(GameFactory.create_game(lobby.users), self.connections,
+                           self.ai_factory, self.guess_delay)
+        lobby.game = game
+        lobby.revision += 1
+        game.lobby_id = lobby.id
+        game.started = False
+        await self.send_player_update(lobby)
+        if game.disposed:
+            return
+        game.started = True
+        game.state.revision += 1
+        turn = game.state.turn_id
+        await game.broadcast_state_update(True)
+        game.schedule_ai_turn(turn)
+
+    async def update_preferences(self, user: User, lobby_id: str, player_data: dict):
+        lobby = await self.get_lobby(lobby_id)
+        if not lobby or user not in lobby.users:
+            raise ValueError("User not in this lobby")
+        if not isinstance(player_data, dict):
+            raise ValueError("Player preferences must be an object")
+        if lobby.game:
+            if player_data:
+                raise ValueError("Preferences cannot change after game startup")
+            await self.send_player_update(lobby)
+            return
+        if "name" in player_data and (not isinstance(player_data["name"], str) or not player_data["name"].strip()):
+            raise ValueError("Name must be a nonempty string")
+        if "ready" in player_data and type(player_data["ready"]) is not bool:
+            raise ValueError("Ready must be a boolean")
+        role = None
+        if player_data.get("role") is not None:
+            if type(player_data["role"]) is not int:
+                raise ValueError("Role must be an integer")
+            role = Role.from_index(player_data["role"])
+            if any(other is not user and other.role == role for other in lobby.users):
+                raise ValueError("Role is already occupied")
+        if "name" in player_data:
+            user.name = player_data["name"].strip()
+        if "ready" in player_data:
+            user.is_ready = player_data["ready"]
+        if role:
+            if user.role != role and "ready" not in player_data:
+                user.is_ready = False
+            user.role = role
+        if player_data:
+            lobby.revision += 1
+        if lobby.ready_to_start():
+            await self.start_game(lobby)
+        else:
+            await self.send_player_update(lobby)
     
     async def get_available_lobbies(self) -> List[Lobby]:
         """Get all lobbies that can be joined"""

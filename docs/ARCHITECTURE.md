@@ -2,6 +2,27 @@
 
 Reviewed: 2026-10-20. This describes the current implementation, not a proposed redesign.
 
+## Backend simplification update
+
+The initial backend refactor described in [TODO](TODO.md) items 1–4 supersedes the corresponding backend ownership descriptions in the original review below:
+
+| Area | Current ownership |
+| --- | --- |
+| `model.py` | Transport-independent player UUID, one optional `Role`, name/readiness, tile data; membership flags are response projections, not mutable player fields |
+| `services/connection_service.py` | One `Connection` interface and a registry of human session contexts/transports; concurrent delivery with a five-second per-send deadline and per-session send ordering |
+| `services/lobby_service.py` | Existing repository plus room membership/index updates, preferences/readiness/start, departure/AI takeover coordination, and room cleanup |
+| `lobby.py` | Waiting-room state, readiness predicate, and pure roster/list projections; no network I/O or startup orchestration |
+| `game/game.py` | Synchronous board/rules/turn/result state; no configuration, sockets, tasks, or OpenAI dependencies |
+| `game/runtime.py` | Game snapshots, async delivery/AI turns, stale-work guards, retry, task cancellation, and AI client cleanup |
+| `gpt/chat_gpt.py` | Single AI wrapper for role-specific inputs, prompts, provider requests, existing response parsing, and explicit close; created lazily per runtime |
+| Message handlers | Decode/validate request envelopes/context, call room/runtime operations, and translate results/errors; no direct membership/preference mutations |
+
+The bridging connection adapter, fake AI connection, `ClueService`, and `GPTAgent` were removed. Player message names/fields and numeric role values are unchanged. No logging database, resumable games, dashboard, or new abort/close actions were added. Repository/handler organization and startup configuration remain for later review.
+
+The original review and its file/line references below are retained as the **pre-refactor baseline**, not a claim that superseded implementation details still exist. Its historical test results likewise refer to that review run; see the backend regression and architecture-boundary suites for the updated structure.
+
+## Original architecture review
+
 ## Scope and summary
 
 The project is a multiplayer Codenames application with human and OpenAI-controlled players. A Next.js browser application communicates directly with a Python WebSocket server. The server owns lobby membership, hidden board information, rules, and AI scheduling. There is no database, account system, REST API, or durable session store.

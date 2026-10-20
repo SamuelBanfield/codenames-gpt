@@ -9,7 +9,7 @@ class RequestIdHandler:
     async def handle(self, user_context: UserContext, data: Dict[str, Any]) -> Dict[str, Any]:
         return {
             "serverMessageType": "idAssign", 
-            "uuid": user_context.connection_id
+            "uuid": user_context.user.id
         }
 
 class CreateLobbyHandler:
@@ -22,7 +22,6 @@ class CreateLobbyHandler:
         if not isinstance(lobby_name, str) or not lobby_name.strip():
             raise ValueError("Lobby name must be a nonempty string")
         lobby = await self.lobby_service.create_lobby(user_context.user, lobby_name)
-        user_context.join_lobby(str(lobby.id))
         
         return {
             "serverMessageType": "lobbyJoined", 
@@ -41,14 +40,11 @@ class JoinLobbyHandler:
         
         lobby = await self.lobby_service.join_lobby(user_context.user, lobby_id)
         if lobby:
-            user_context.join_lobby(lobby_id)
             return {
                 "serverMessageType": "lobbyJoined", 
                 "lobbyId": lobby_id
             }
         else:
-            if not user_context.user.in_lobby:
-                user_context.leave_lobby()
             return {
                 "serverMessageType": "error",
                 "message": "Unable to join lobby"
@@ -74,5 +70,4 @@ class LeaveLobbyHandler:
     async def handle(self, user_context: UserContext, data: Dict[str, Any]) -> Dict[str, Any]:
         if user_context.lobby_id:
             await self.lobby_service.leave_lobby(user_context.user, user_context.lobby_id)
-        user_context.leave_lobby()
         return {"serverMessageType": "lobbyLeft"}
