@@ -8,20 +8,20 @@ from codenames.game.factory import create_ai_user
 from codenames.game.game import CodenamesGame
 from codenames.gpt.chat_gpt import ChatGPT
 from codenames.model import Tile, User
-from codenames.options import GUESS_DELAY
-from codenames.services.connection_service import ConnectionManager
+from codenames.connections import Connections
 from codenames.util import get_tile_by_word
 
 logger = logging.getLogger(__name__)
 
 
 class GameRuntime:
-    def __init__(self, state: CodenamesGame, connections: ConnectionManager,
-                 ai_factory: Callable[[], ChatGPT] = ChatGPT, guess_delay: float = GUESS_DELAY):
+    def __init__(self, state: CodenamesGame, connections: Connections,
+                 ai_factory: Callable[[], ChatGPT], guess_delay: float,
+                 *, lobby_id: Optional[str] = None):
         self.state = state
         self.connections = connections
-        self.lobby_id: Optional[str] = None
-        self.started = True
+        self.lobby_id = lobby_id
+        self.started = False
         self.disposed = False
         self.ai_error: Optional[str] = None
         self.guess_delay = guess_delay
@@ -29,6 +29,16 @@ class GameRuntime:
         self._ai: Optional[ChatGPT] = None
         self._tasks: set[asyncio.Task] = set()
         self._ai_turns: dict[int, asyncio.Task] = {}
+
+    async def activate(self):
+        """Activate once, after room publication/roster delivery; disposal wins."""
+        if self.started or self.disposed or self.state.check_win():
+            return
+        self.started = True
+        self.state.revision += 1
+        turn = self.state.turn_id
+        await self.broadcast_state_update(True)
+        self.schedule_ai_turn(turn)
 
     @property
     def ai(self) -> ChatGPT:

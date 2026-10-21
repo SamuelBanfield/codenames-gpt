@@ -23,16 +23,15 @@ function captureWebSockets() {
 it("finding 8: the default browser WebSocket URL matches the backend's default port", () => {
   // Evaluate the real Python configuration with user properties and overrides excluded.
   const backendEnvironment: NodeJS.ProcessEnv = {
-    ...process.env, OPENAI_KEY: "test-key-not-a-real-credential",
+    ...process.env, OPENAI_API_KEY: "test-key-not-a-real-credential",
   };
   for (const key of ["HOST", "WEBSOCKET_PORT", "GPT_MODEL", "GUESS_DELAY"]) {
     delete backendEnvironment[key];
   }
   const backend = spawnSync(process.env.PYTHON || "python", ["-c", [
-    "from unittest.mock import patch",
-    "with patch('builtins.open', side_effect=FileNotFoundError):",
-    "    from codenames.options import WEBSOCKET_PORT",
-    "print(WEBSOCKET_PORT)",
+    "from codenames.options import load_settings",
+    "settings = load_settings(env_file=None, environ={'OPENAI_API_KEY': 'test-key-not-a-real-credential'})",
+    "print(settings.websocket_port)",
   ].join("\n")], {
     cwd: resolve(process.cwd(), "../backend"),
     env: backendEnvironment,

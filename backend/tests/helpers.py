@@ -3,11 +3,11 @@
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, Mock
 
-from codenames.game.factory import GameFactory
+from codenames.game.factory import create_game
 from codenames.game.runtime import GameRuntime
 from codenames.model import User
-from codenames.services.connection_service import Connection, ConnectionManager
-from codenames.services.lobby_service import InMemoryLobbyRepository, LobbyService
+from codenames.connections import Connection, Connections
+from codenames.rooms import Rooms
 
 
 connections = None
@@ -15,7 +15,7 @@ connections = None
 
 def reset_connections():
     global connections
-    connections = ConnectionManager()
+    connections = Connections()
 
 
 def ai_factory():
@@ -30,7 +30,6 @@ def make_user(name="Player", role=None, is_human=True):
     user.name = name
     if is_human:
         connection = Mock(spec=Connection)
-        connection.id = user.id
         connection.send = AsyncMock()
         connections.add_session(user, connection)
     return user
@@ -45,9 +44,11 @@ def connection_for(user):
     return context_for(user).connection
 
 
-def make_runtime(users):
-    return GameRuntime(GameFactory.create_game(users), connections, ai_factory(), guess_delay=0)
+async def make_runtime(users):
+    runtime = GameRuntime(create_game(users), connections, ai_factory(), guess_delay=0)
+    await runtime.activate()
+    return runtime
 
 
 def make_service():
-    return LobbyService(InMemoryLobbyRepository(), connections, ai_factory(), guess_delay=0)
+    return Rooms(connections, ai_factory(), guess_delay=0)

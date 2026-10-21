@@ -4,7 +4,6 @@ import logging
 from typing import List, Tuple
 
 from codenames.model import Tile, User
-from codenames.options import OPEN_AI_KEY, GPT_MODEL
 
 SYSTEM_PROMPT_CLUE = (
     "You are playing codenames and it's your turn to give a clue. "
@@ -18,8 +17,9 @@ SYSTEM_PROMPT_GUESS = (
 
 
 class ChatGPT:
-    def __init__(self):
-        self.client = openai.AsyncOpenAI(api_key=OPEN_AI_KEY)
+    def __init__(self, api_key: str, model: str):
+        self.client = openai.AsyncOpenAI(api_key=api_key)
+        self.model = model
 
     async def close(self):
         await self.client.close()
@@ -78,7 +78,7 @@ class ChatGPT:
     async def _get_gpt_response(self, system_prompt: str, user_prompt: str):
         try:
             return await self.client.chat.completions.create(
-                model=GPT_MODEL,
+                model=self.model,
                 messages=[
                     {"role": "system", "content": system_prompt},
                     {"role": "user", "content": user_prompt},

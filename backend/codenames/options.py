@@ -1,24 +1,49 @@
-import json
-import logging
+"""Explicit startup configuration; importing this module has no side effects."""
+
 import os
-import pathlib
+from dataclasses import dataclass, field
+from pathlib import Path
+from typing import Mapping, Optional
 
-_properties_file_path = pathlib.Path(__file__).parent.parent / ".properties.json"
+from dotenv import dotenv_values
 
-_properties = {}
-try:
-    with open(_properties_file_path) as property_file:
-        _properties = json.load(property_file)
-except FileNotFoundError:
-    logging.warning(f".properties.json file not found at {_properties_file_path}, relying on environment variables only")
-    pass
+DEFAULT_ENV_FILE = Path(__file__).resolve().parent.parent / ".env"
 
-HOST = os.getenv("HOST", _properties.get("host", "0.0.0.0")) 
-WEBSOCKET_PORT = int(os.getenv("WEBSOCKET_PORT", _properties.get("websocketPort", 8000)))
-OPEN_AI_KEY = os.getenv("OPENAI_KEY", _properties.get("openaiKey"))
-GPT_MODEL: str = os.getenv("GPT_MODEL", _properties.get("gptModel", "gpt-4o"))
-GUESS_DELAY = int(os.getenv("GUESS_DELAY", _properties.get("guessDelay", 0)))
 
-# Validate required properties
-if not OPEN_AI_KEY:
-    raise ValueError("OPENAI_KEY must be set via environment variable or .properties.json")
+@dataclass(frozen=True)
+class Settings:
+    host: str
+    websocket_port: int
+    openai_api_key: str = field(repr=False)
+    gpt_model: str
+    guess_delay: int
+
+
+def load_settings(*, env_file: Optional[Path] = DEFAULT_ENV_FILE,
+                  environ: Optional[Mapping[str, str]] = None) -> Settings:
+    values = dict(dotenv_values(env_file, interpolate=False)) if env_file is not None else {}
+    values.update(os.environ if environ is None else environ)
+
+    def text(name, default=None):
+        value = values.get(name, default)
+        if not isinstance(value, str) or not value.strip():
+            raise ValueError(f"{name} must be a nonempty value")
+        return value.strip()
+
+    def integer(name, default, minimum, maximum=None):
+        try:
+            value = int(text(name, default))
+        except ValueError:
+            raise ValueError(f"{name} must be an integer") from None
+        if value < minimum or (maximum is not None and value > maximum):
+            bounds = f"between {minimum} and {maximum}" if maximum is not None else f"at least {minimum}"
+            raise ValueError(f"{name} must be {bounds}")
+        return value
+
+    return Settings(
+        host=text("HOST", "0.0.0.0"),
+        websocket_port=integer("WEBSOCKET_PORT", "8000", 1, 65535),
+        openai_api_key=text("OPENAI_API_KEY"),
+        gpt_model=text("GPT_MODEL", "gpt-4o"),
+        guess_delay=integer("GUESS_DELAY", "0", 0),
+    )

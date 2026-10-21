@@ -10,7 +10,7 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
-from codenames.message_router.message_router import MessageRouter
+from codenames.messages import MessageRouter
 from codenames.model import Role, Tile
 from tests.helpers import make_user, make_runtime, make_service, context_for, connection_for
 from codenames.websocket_server import WebSocketServer
@@ -30,8 +30,8 @@ def make_game(monkeypatch):
 
     monkeypatch.setattr("codenames.game.game.generate_tiles", generate_tiles)
 
-    def create(users=None):
-        return make_runtime(
+    async def create(users=None):
+        return await make_runtime(
             users if users is not None else [make_user(role.name, role) for role in Role]
         )
 
@@ -95,7 +95,7 @@ def prepare_terminal_guess(game, team, target):
 @pytest.mark.parametrize("team", ["red", "blue"])
 @pytest.mark.parametrize("target", ["own", "opponent", "assassin"])
 async def test_winning_guess_does_not_request_another_ai_clue(make_game, team, target):
-    game = make_game()
+    game = await make_game()
     operative, tile, expected_winner = prepare_terminal_guess(game, team, target)
     next_spymaster = next(user for user in game.state.users if user.team != team and user.is_spy_master)
     next_spymaster.is_human = False
@@ -109,7 +109,7 @@ async def test_winning_guess_does_not_request_another_ai_clue(make_game, team, t
 
 
 async def test_clue_service_checks_completion_before_requesting_ai(make_game):
-    game = make_game()
+    game = await make_game()
     for tile in game.state.tiles:
         if tile.team == "red":
             tile.reveal()
@@ -120,7 +120,7 @@ async def test_clue_service_checks_completion_before_requesting_ai(make_game):
 
 
 async def test_ai_guess_loop_stops_immediately_after_a_winning_guess(make_game):
-    game = make_game()
+    game = await make_game()
     operative, winning_tile, _ = prepare_terminal_guess(game, "red", "own")
     game.state.guesses_remaining = 3
     game.state.clue = ("CLUE", 3)
@@ -135,7 +135,7 @@ async def test_ai_guess_loop_stops_immediately_after_a_winning_guess(make_game):
 
 
 async def test_internal_pass_cannot_mutate_a_completed_game(make_game):
-    game = make_game()
+    game = await make_game()
     operative, tile, _ = prepare_terminal_guess(game, "red", "own")
     game.state.guesses_remaining = 2
     game.state.clue = ("CLUE", 2)
@@ -221,7 +221,7 @@ async def test_last_human_departure_terminates_pending_ai_work(service, tasks):
     await service.leave_lobby(owner, str(lobby.id))
     await asyncio.sleep(0)
 
-    assert await service.get_lobby(str(lobby.id)) is None
+    assert service.get_lobby(str(lobby.id)) is None
     assert task.done(), "Deleting an abandoned lobby must terminate its pending game work"
 
 
@@ -259,7 +259,7 @@ async def test_second_preferences_during_startup_does_not_replace_the_game(servi
 
 
 async def test_turn_advance_during_broadcast_does_not_schedule_a_clue_for_an_operative(make_game, tasks):
-    game = make_game()
+    game = await make_game()
     game.state.current_turn = Role.RED_OPERATIVE
     game.state.guesses_remaining = 1
     blue_operative = next(user for user in game.state.users if user.team == "blue" and not user.is_spy_master)
@@ -294,7 +294,7 @@ async def test_turn_advance_during_broadcast_does_not_schedule_a_clue_for_an_ope
 
 
 async def test_failed_recipient_does_not_stop_next_ai_turn(make_game, service):
-    game = make_game()
+    game = await make_game()
     game.state.current_turn = Role.RED_OPERATIVE
     game.state.guesses_remaining = 1
     departed = next(user for user in game.state.users if user.team == "red" and user.is_spy_master)
@@ -334,7 +334,7 @@ async def test_postgame_lobby_transition_does_not_inherit_readiness_or_in_game(s
 
     # An explicit rejection is also safe; flags must reset if switching is accepted.
     if context.lobby_id != str(lobby.id):
-        new_lobby = await service.get_lobby(context.lobby_id)
+        new_lobby = service.get_lobby(context.lobby_id)
         assert not any(player["inGame"] for player in new_lobby.get_player_update()["players"])
         assert owner.is_ready is False
 
@@ -351,7 +351,7 @@ async def test_name_confirmation_in_a_new_room_does_not_autostart_from_old_readi
     await router.route_message(context, "createLobby", {"name": "Next room"})
     if context.lobby_id == str(old.id):
         return  # Switching was rejected rather than silently carrying old state.
-    new = await service.get_lobby(context.lobby_id)
+    new = service.get_lobby(context.lobby_id)
     assert new.game is None
 
     await router.route_message(context, "preferencesRequest", {"player": {"name": "New name"}})
@@ -384,7 +384,7 @@ async def test_late_role_preferences_cannot_claim_an_ai_role_or_expose_hidden_ti
 @pytest.mark.parametrize("team", ["red", "blue"])
 @pytest.mark.parametrize("target", ["own", "opponent", "assassin"])
 async def test_control_terminal_guess_awards_the_correct_winner_and_rejects_later_guesses(make_game, team, target):
-    game = make_game()
+    game = await make_game()
     operative, tile, expected = prepare_terminal_guess(game, team, target)
     await game.guess_tile(operative, tile)
     assert game.state.check_win() == expected
@@ -537,7 +537,7 @@ async def test_human_can_retry_a_failed_ai_clue_and_resume_the_game(service, tas
 
 
 async def test_command_from_an_earlier_matching_role_turn_is_rejected(make_game, service):
-    game = make_game()
+    game = await make_game()
     owner = game.state.get_on_turn_user()
     lobby = await service.create_lobby(owner, "Turn versions")
     lobby.game = game
@@ -599,7 +599,7 @@ async def test_explicit_leave_retires_a_finished_room_and_is_idempotent(service)
 
     assert await router.route_message(context, "leaveLobby", {}) == {"serverMessageType": "lobbyLeft"}
     assert context.lobby_id is None
-    assert await service.get_lobby(str(lobby.id)) is None
+    assert service.get_lobby(str(lobby.id)) is None
     assert lobby.game.disposed
     assert context.lobby_id is None and not owner.is_ready and owner.role is None
     assert await router.route_message(context, "leaveLobby", {}) == {"serverMessageType": "lobbyLeft"}

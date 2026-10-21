@@ -52,35 +52,57 @@ def prerequisites():
     return node, npm, version
 
 
-def read_properties(path):
-    if not path.exists():
-        return {}
-    try:
-        properties = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, ValueError):
-        raise StartupError(f"Cannot read {path.name}; it must contain valid JSON.") from None
-    if not isinstance(properties, dict):
-        raise StartupError(f"{path.name} must contain a JSON object.")
-    return properties
+def configure_backend(path, backend_port=None):
+    """Run using the managed venv; return public launch settings, never the key."""
+    from dotenv import dotenv_values, set_key
+    from backend.codenames.options import load_settings
+
+    values = dict(dotenv_values(path, interpolate=False))
+    values.update(os.environ)
+    values["WEBSOCKET_PORT"] = str(port_number(
+        backend_port if backend_port is not None else values.get("WEBSOCKET_PORT", "8000"),
+    ))
+    values.setdefault("GUESS_DELAY", "1")
+    configured_key = values.get("OPENAI_API_KEY")
+    if not isinstance(configured_key, str) or not configured_key.strip():
+        if "OPENAI_API_KEY" in os.environ:
+            raise StartupError("OPENAI_API_KEY is empty; unset it to use backend/.env.")
+        print("No OpenAI API key configured. It will be saved in ignored backend/.env.", file=sys.stderr)
+        try:
+            key = getpass.getpass("OpenAI API key: ").strip()
+        except EOFError:
+            raise StartupError("Set OPENAI_API_KEY or add it to backend/.env.") from None
+        if not key:
+            raise StartupError("An OpenAI API key is required for AI players.")
+        descriptor = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_APPEND, 0o600)
+        os.close(descriptor)
+        set_key(path, "OPENAI_API_KEY", key, quote_mode="always")
+        values["OPENAI_API_KEY"] = key
+        print("Saved local configuration; you will not be prompted next time.", file=sys.stderr)
+    settings = load_settings(env_file=None, environ=values)
+    return {"WEBSOCKET_PORT": str(settings.websocket_port), "GPT_MODEL": settings.gpt_model,
+            "GUESS_DELAY": str(settings.guess_delay)}
 
 
-def api_key(properties, path):
-    for key in (os.environ.get("OPENAI_KEY"), properties.get("openaiKey")):
-        if isinstance(key, str) and key.strip():
-            return key.strip()
-    print("No OpenAI API key configured. It will be saved locally in ignored backend/.properties.json.")
-    key = getpass.getpass("OpenAI API key: ").strip()
-    if not key:
-        raise StartupError("An OpenAI API key is required for AI players.")
-    properties["openaiKey"] = key
-    # This is the application's existing ignored local configuration. Never
-    # include the key in command arguments, cache fingerprints, or output.
-    descriptor = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
-    with os.fdopen(descriptor, "w", encoding="utf-8") as config:
-        json.dump(properties, config, indent=2)
-        config.write("\n")
-    print("Saved local configuration; you will not be prompted next time.")
-    return key
+def prepare_backend(root, python, backend_port):
+    # The launcher itself stays stdlib-only. Dotenv/configuration runs after
+    # dependency setup, in the managed venv, with only public settings on stdout.
+    script = """import json, sys
+from pathlib import Path
+import dev
+try:
+    config = dev.configure_backend(Path(sys.argv[1]), int(sys.argv[2]) if sys.argv[2] else None)
+except (dev.StartupError, OSError, ValueError, dev.argparse.ArgumentTypeError) as error:
+    print(f'Cannot configure backend: {error}', file=sys.stderr)
+    sys.exit(1)
+print(json.dumps(config))
+"""
+    result = subprocess.run([str(python), "-c", script, str(root / "backend/.env"),
+                             str(backend_port) if backend_port is not None else ""],
+                            cwd=root, stdout=subprocess.PIPE, text=True)
+    if result.returncode:
+        raise StartupError("Backend configuration failed; see its message above.")
+    return json.loads(result.stdout)
 
 
 def fingerprint(paths, version):
@@ -96,7 +118,7 @@ def installed(stamp, expected, executable):
 
 def setup_command(command, cwd):
     environment = os.environ.copy()
-    environment.pop("OPENAI_KEY", None)
+    environment.pop("OPENAI_API_KEY", None)
     subprocess.run(command, cwd=cwd, env=environment, check=True)
 
 
@@ -194,16 +216,15 @@ def wait_for_servers(processes, ports, timeout=90):
             time.sleep(0.2)
 
 
-def run_servers(root, python, next_cli, node, properties, key, backend_port, ui_port, open_browser):
+def run_servers(root, python, next_cli, node, config, backend_port, ui_port, open_browser):
     backend_environment = os.environ.copy()
+    backend_environment.update(config)
     backend_environment.update({
-        "OPENAI_KEY": key, "HOST": "127.0.0.1", "WEBSOCKET_PORT": str(backend_port),
+        "HOST": "127.0.0.1", "WEBSOCKET_PORT": str(backend_port),
         "PYTHONUNBUFFERED": "1",
     })
-    backend_environment.setdefault("GPT_MODEL", str(properties.get("gptModel", "gpt-4o")))
-    backend_environment.setdefault("GUESS_DELAY", str(properties.get("guessDelay", 1)))
     frontend_environment = os.environ.copy()
-    frontend_environment.pop("OPENAI_KEY", None)
+    frontend_environment.pop("OPENAI_API_KEY", None)
     frontend_environment["NEXT_PUBLIC_WEBSOCKET_URL"] = f"ws://127.0.0.1:{backend_port}"
     processes = []
     try:
@@ -243,16 +264,14 @@ def main(argv=None):
     args = parser.parse_args(argv)
     try:
         node, npm, version = prerequisites()
-        config_path = ROOT / "backend/.properties.json"
-        properties = read_properties(config_path)
-        backend_port = args.backend_port or port_number(os.environ.get("WEBSOCKET_PORT", properties.get("websocketPort", 8000)))
+        check_port(args.port)
+        python, next_cli = ensure_dependencies(ROOT, node, npm, version)
+        config = prepare_backend(ROOT, python, args.backend_port)
+        backend_port = port_number(config["WEBSOCKET_PORT"])
         if args.port == backend_port:
             raise StartupError("The backend and frontend must use different ports.")
         check_port(backend_port)
-        check_port(args.port)
-        key = api_key(properties, config_path)
-        python, next_cli = ensure_dependencies(ROOT, node, npm, version)
-        run_servers(ROOT, python, next_cli, node, properties, key, backend_port, args.port, not args.no_browser)
+        run_servers(ROOT, python, next_cli, node, config, backend_port, args.port, not args.no_browser)
     except KeyboardInterrupt:
         print("\nStopped both servers.")
         return 0

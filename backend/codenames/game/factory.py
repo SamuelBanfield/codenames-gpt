@@ -9,8 +9,6 @@ def create_ai_user(role: Role) -> User:
     return user
 
 
-class GameFactory:
-    @staticmethod
-    def create_game(users: list[User]) -> CodenamesGame:
-        occupied = {user.role for user in users}
-        return CodenamesGame(list(users) + [create_ai_user(role) for role in Role if role not in occupied])
+def create_game(users: list[User]) -> CodenamesGame:
+    occupied = {user.role for user in users}
+    return CodenamesGame(list(users) + [create_ai_user(role) for role in Role if role not in occupied])

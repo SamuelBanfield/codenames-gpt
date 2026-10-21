@@ -6,20 +6,22 @@ import os
 import subprocess
 import sys
 from contextlib import AsyncExitStack
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, Mock
 
 import pytest
 import websockets
 
-from codenames.game.factory import create_ai_user
+from codenames.game.factory import create_ai_user, create_game
+from codenames.game.runtime import GameRuntime
+from codenames.messages import MessageRouter
 from codenames.model import Role, Tile
-from codenames.websocket_server import WebSocketServer
+from codenames.websocket_server import WebSocketConnection, WebSocketServer
 from tests.helpers import connection_for, context_for, make_runtime, make_service, make_user
 
 
 def test_rules_can_run_without_credentials_or_ai_imports():
     environment = os.environ.copy()
-    environment.pop("OPENAI_KEY", None)
+    environment.pop("OPENAI_API_KEY", None)
     result = subprocess.run([sys.executable, "-c", "\n".join([
         "import sys",
         "from codenames.game.game import CodenamesGame",
@@ -48,7 +50,7 @@ def test_role_wire_mapping_and_transport_free_ai(role):
 
 async def test_runtime_lazily_creates_one_client_and_closes_it_once():
     users = [make_user(role.name, role) for role in Role]
-    runtime = make_runtime(users)
+    runtime = await make_runtime(users)
     runtime._ai_factory.assert_not_called()
     await runtime.provide_clue(users[0], "FIRST", 1)
     await runtime.pass_turn(users[2])
@@ -64,7 +66,7 @@ async def test_runtime_lazily_creates_one_client_and_closes_it_once():
 
 async def test_winning_move_closes_existing_client_without_creating_another():
     users = [make_user(role.name, role) for role in Role]
-    runtime = make_runtime(users)
+    runtime = await make_runtime(users)
     client = runtime.ai
     runtime.state.tiles = [Tile("RED", "red"), Tile("BLUE", "blue"), Tile("KILL", "assassin")]
     await runtime.provide_clue(users[0], "CLUE", 1)
@@ -122,7 +124,7 @@ async def test_preferences_validate_before_mutation_in_room_coordinator():
 
 async def test_shared_delivery_keeps_board_projection_recipient_specific():
     users = [make_user(role.name, role) for role in Role]
-    runtime = make_runtime(users)
+    runtime = await make_runtime(users)
     runtime.state.tiles[0].reveal()
     await runtime.broadcast_state_update(False)
     for user in users:
@@ -242,4 +244,192 @@ async def test_real_websocket_player_protocol_still_starts_and_advances_game():
                        for frame in guessed)
             await send(sockets[1], "guessTile", word=red_word)
             assert (await receive_kind(sockets[1], "error"))["message"] == "It is not your operative turn"
-    assert await service.repository.list_lobbies() == []
+    assert service.list_lobbies() == []
+
+
+async def test_room_queries_are_direct_reads_and_return_independent_lists():
+    rooms = make_service()
+    first = make_user("First")
+    second = make_user("Second")
+    lobby = await rooms.create_lobby(first, "Rooms")
+    await rooms.join_lobby(second, lobby.id)
+    assert rooms.get_lobby(lobby.id) is lobby
+    assert rooms.get_lobby("missing") is None
+    listed = rooms.list_lobbies()
+    listed.clear()
+    assert rooms.list_lobbies() == [lobby]
+    assert not hasattr(lobby, "lobby_owner")
+    await rooms.leave_lobby(first, lobby.id)
+    assert rooms.get_lobby(lobby.id) is lobby
+    assert lobby.users == [second]
+    assert context_for(first).lobby_id is None
+
+
+async def test_lobby_list_dispatch_keeps_full_and_started_rooms_hidden():
+    rooms = make_service()
+    users = [make_user(role.name, role) for role in Role]
+    lobby = await rooms.create_lobby(users[0], "Available")
+    router = MessageRouter(rooms)
+    session = context_for(users[0])
+    assert (await router.route_message(session, "lobbiesRequest", {}))["lobbies"] == [lobby.to_json()]
+    for user in users[1:]:
+        await rooms.join_lobby(user, lobby.id)
+    assert rooms.get_available_lobbies() == []
+    await rooms.leave_lobby(users[3], lobby.id)
+    assert rooms.get_available_lobbies() == [lobby]
+    await rooms.start_game(lobby)
+    try:
+        assert rooms.list_lobbies() == [lobby]
+        assert (await router.route_message(session, "lobbiesRequest", {}))["lobbies"] == []
+    finally:
+        await lobby.game.dispose()
+
+
+def test_plain_game_factory_fills_roles_without_mutating_human_list():
+    human = make_user("Human", Role.BLUE_OPERATIVE)
+    humans = [human]
+    game = create_game(humans)
+    assert humans == [human]
+    assert game.users[0] is human
+    assert len(game.users) == 4
+    assert {user.role for user in game.users} == set(Role)
+    assert all(not user.is_human for user in game.users[1:])
+
+
+@pytest.mark.parametrize("command", [
+    "preferencesRequest", "initialiseRequest", "guessTile", "provideClue", "retryAI",
+])
+@pytest.mark.parametrize("context", ["no-room", "missing-room", "non-member"])
+async def test_dispatch_preserves_context_errors(command, context):
+    rooms = make_service()
+    user = make_user()
+    session = context_for(user)
+    expected = "User not in a lobby"
+    if context == "missing-room":
+        session.lobby_id = "missing"
+        expected = "Lobby not found"
+    elif context == "non-member":
+        other_room = await rooms.create_lobby(make_user("Other"), "Other")
+        session.lobby_id = other_room.id
+        expected = "User not in this lobby"
+    if command == "initialiseRequest" and context != "no-room":
+        expected = "Lobby membership not found"
+    result = await MessageRouter(rooms).route_message(session, command, {})
+    assert result == {"serverMessageType": "stateError", "message": expected}
+
+
+@pytest.mark.parametrize("command", ["guessTile", "provideClue", "retryAI"])
+async def test_dispatch_requires_a_game_for_game_commands(command):
+    rooms = make_service()
+    user = make_user()
+    await rooms.create_lobby(user, "Waiting")
+    result = await MessageRouter(rooms).route_message(context_for(user), command, {})
+    assert result == {"serverMessageType": "stateError", "message": "Game not found"}
+
+
+async def test_dispatch_still_rejects_unknown_and_malformed_requests():
+    rooms = make_service()
+    user = make_user()
+    session = context_for(user)
+    router = MessageRouter(rooms)
+    result = await router.route_message(session, "unknown", {})
+    assert result == {"serverMessageType": "error", "message": "Unknown message type: unknown"}
+    invalid = await router.route_message(session, "createLobby", {"name": " "})
+    assert invalid["code"] == "invalidRequest"
+    assert rooms.list_lobbies() == []
+    lobby = await rooms.create_lobby(user, "Waiting")
+    invalid = await router.route_message(session, "preferencesRequest", {"player": []})
+    assert invalid["message"] == "Player preferences must be an object"
+    assert not user.is_ready and user.role is None and lobby.game is None
+
+
+async def test_transport_has_no_identity_and_protocol_uses_player_uuid():
+    rooms = make_service()
+    user = make_user()
+    socket = Mock()
+    socket.send = AsyncMock()
+    connection = WebSocketConnection(socket)
+    assert not hasattr(connection, "id")
+    session = context_for(user)
+    assert not hasattr(session, "connection_id")
+    response = await MessageRouter(rooms).route_message(session, "idRequest", {})
+    assert response == {"serverMessageType": "idAssign", "uuid": user.id}
+    await connection.send(response)
+    assert json.loads(socket.send.await_args.args[0]) == response
+
+
+async def test_runtime_activation_is_once_only_and_owns_startup_state():
+    rooms = make_service()
+    users = [make_user(role.name, role) for role in Role]
+    runtime = GameRuntime(create_game(users), rooms.connections, rooms.ai_factory, 0, lobby_id="room")
+    assert not runtime.started
+    assert runtime.state.revision == 0
+    assert runtime.get_state_update(users[0], False)["phase"] == "starting"
+    assert runtime.get_state_update(users[0], False)["lobbyId"] == "room"
+    with pytest.raises(ValueError, match="not ready"):
+        runtime.validate_action({})
+    sending, release = asyncio.Event(), asyncio.Event()
+
+    async def held_broadcast(new_turn):
+        sending.set()
+        await release.wait()
+
+    runtime.broadcast_state_update = AsyncMock(side_effect=held_broadcast)
+    runtime.schedule_ai_turn = Mock()
+    first = asyncio.create_task(runtime.activate())
+    try:
+        await asyncio.wait_for(sending.wait(), 1)
+        await runtime.activate()
+        assert runtime.started
+        assert runtime.state.revision == 1
+        runtime.broadcast_state_update.assert_awaited_once_with(True)
+        runtime.schedule_ai_turn.assert_not_called()
+    finally:
+        release.set()
+        await first
+        await runtime.dispose()
+    runtime.schedule_ai_turn.assert_called_once_with(runtime.state.turn_id)
+    rooms.ai_factory.assert_not_called()
+
+
+@pytest.mark.parametrize("terminal", ["disposed", "finished"])
+async def test_runtime_cannot_activate_after_disposal_or_completion(terminal):
+    rooms = make_service()
+    users = [make_user(role.name, role) for role in Role]
+    runtime = GameRuntime(create_game(users), rooms.connections, rooms.ai_factory, 0, lobby_id="room")
+    runtime.broadcast_state_update = AsyncMock()
+    if terminal == "disposed":
+        await runtime.dispose()
+    else:
+        for tile in runtime.state.tiles:
+            if tile.team == "red":
+                tile.reveal()
+    await runtime.activate()
+    assert not runtime.started
+    assert runtime.state.revision == 0
+    assert not runtime._tasks
+    runtime.broadcast_state_update.assert_not_awaited()
+    rooms.ai_factory.assert_not_called()
+
+
+async def test_disposal_during_activation_delivery_prevents_ai_startup():
+    rooms = make_service()
+    human = make_user("Blue spymaster", Role.BLUE_SPYMASTER)
+    runtime = GameRuntime(create_game([human]), rooms.connections, rooms.ai_factory, 0, lobby_id="room")
+    sending, release = asyncio.Event(), asyncio.Event()
+
+    async def held_broadcast(new_turn):
+        sending.set()
+        await release.wait()
+
+    runtime.broadcast_state_update = held_broadcast
+    task = asyncio.create_task(runtime.activate())
+    try:
+        await asyncio.wait_for(sending.wait(), 1)
+        await runtime.dispose()
+    finally:
+        release.set()
+        await task
+    assert runtime.disposed
+    assert not runtime._tasks
+    rooms.ai_factory.assert_not_called()

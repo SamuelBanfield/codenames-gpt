@@ -1,4 +1,4 @@
-"""Waiting-room state and pure projections; lifecycle operations live in LobbyService."""
+"""Waiting-room state and pure projections; lifecycle operations live in Rooms."""
 
 import uuid
 from typing import Optional
@@ -11,7 +11,6 @@ class Lobby:
     def __init__(self, user: User, name: str):
         self.id = str(uuid.uuid4())
         self.name = name
-        self.lobby_owner = user
         self.users = [user]
         self.revision = 1
         self.game: Optional[GameRuntime] = None

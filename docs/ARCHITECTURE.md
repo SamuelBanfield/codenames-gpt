@@ -4,20 +4,39 @@ Reviewed: 2026-10-20. This describes the current implementation, not a proposed 
 
 ## Backend simplification update
 
-The initial backend refactor described in [TODO](TODO.md) items 1–4 supersedes the corresponding backend ownership descriptions in the original review below:
+The backend refactors described in [TODO](TODO.md) items 1–4, 6, and 7 supersede the corresponding backend ownership descriptions in the original review below. The organization/configuration cleanup was completed locally on 2026-10-21:
 
 | Area | Current ownership |
 | --- | --- |
 | `model.py` | Transport-independent player UUID, one optional `Role`, name/readiness, tile data; membership flags are response projections, not mutable player fields |
-| `services/connection_service.py` | One `Connection` interface and a registry of human session contexts/transports; concurrent delivery with a five-second per-send deadline and per-session send ordering |
-| `services/lobby_service.py` | Existing repository plus room membership/index updates, preferences/readiness/start, departure/AI takeover coordination, and room cleanup |
+| `options.py` | Immutable `Settings` and explicit environment/dotenv loading/validation; importing backend modules does not load configuration or require credentials |
+| `app.py`, `run.py` | Application assembly, listener lifetime, and guaranteed shutdown; settings are loaded once and dependencies passed explicitly |
+| `connections.py` | `Connection`, `Session`, and `Connections`: human session/transport registry and concurrent delivery with a five-second per-send deadline and per-session send ordering |
+| `rooms.py` | `Rooms` directly owns the live room dictionary, synchronous lookups/listing, and async membership/preferences/readiness/start/departure/cleanup operations; no repository layer |
 | `lobby.py` | Waiting-room state, readiness predicate, and pure roster/list projections; no network I/O or startup orchestration |
 | `game/game.py` | Synchronous board/rules/turn/result state; no configuration, sockets, tasks, or OpenAI dependencies |
 | `game/runtime.py` | Game snapshots, async delivery/AI turns, stale-work guards, retry, task cancellation, and AI client cleanup |
+| `game/factory.py` | Plain `create_game` and `create_ai_user` functions; no static-method factory class |
 | `gpt/chat_gpt.py` | Single AI wrapper for role-specific inputs, prompts, provider requests, existing response parsing, and explicit close; created lazily per runtime |
-| Message handlers | Decode/validate request envelopes/context, call room/runtime operations, and translate results/errors; no direct membership/preference mutations |
+| `messages.py` | One `MessageRouter` with a table of bound handler methods and shared context checks; decodes/validates protocol data, invokes room/runtime operations, and translates results/errors |
 
-The bridging connection adapter, fake AI connection, `ClueService`, and `GPTAgent` were removed. Player message names/fields and numeric role values are unchanged. No logging database, resumable games, dashboard, or new abort/close actions were added. Repository/handler organization and startup configuration remain for later review.
+The bridging connection adapter, fake AI connection, `ClueService`, and `GPTAgent` were removed. Step 6 also removed `services/`, the async CRUD repository, the class-per-command `message_router/` package, static `GameFactory`, and unused lobby-owner state/transfer logic. Player message names/fields and numeric role values are unchanged. No logging database, resumable games, dashboard, or new abort/close actions were added. The WebSocket server obtains the shared connection registry from its room coordinator; application construction/listener lifetime now resides in `app.py`, not the transport module.
+
+Verification after step 6: 100 backend, 29 frontend, and 10 launcher tests pass. This includes existing lifecycle/concurrency cases, the real-WebSocket flow, and added dispatcher/context-error, room-query/filtering, and factory checks. Backend application Python source decreased from 1,293 to 1,093 lines versus the preceding commit (including comments and blank lines, excluding tests).
+
+Follow-up simplifications: transport connections now expose only `send`, with no duplicate connection UUID or session `connection_id` alias; protocol IDs and delivery logs use the existing player UUID. `GameRuntime` receives its room ID during construction, starts inactive, and owns one-time activation through `activate()`. `Rooms` publishes the runtime and delivers the roster before requesting activation; it no longer writes runtime startup flags or game revisions directly. Activation guards preserve disposal, completion, and stale-turn behavior. The backend suite now has 105 passing cases, including concurrent/repeated activation and disposal during startup delivery.
+
+### Current configuration and application lifetime (step 7)
+
+`run.py` configures logging and invokes `app.main()`. The app loads validated settings once, creates the shared `Connections`, a lazy per-game `ChatGPT(api_key, model)` factory, and `Rooms(connections, ai_factory, guess_delay)`, then runs the WebSocket listener. No configuration is loaded and no AI client is created by importing these modules.
+
+Process environment overrides literal values from optional `backend/.env`; `.env` loading does not mutate the process environment. Defaults are `HOST=0.0.0.0`, `WEBSOCKET_PORT=8000`, `GPT_MODEL=gpt-4o`, and `GUESS_DELAY=0` (nonnegative whole seconds between guesses). `OPENAI_API_KEY` is required at startup and excluded from the settings representation. The old `.properties.json` format and `OPENAI_KEY` variable are unsupported, with no automatic migration. `.env`/`.env.*` are Git-ignored except `.env.example`, and Docker contexts exclude them; old credential-file ignore rules remain as a safety measure only.
+
+`dev.py` remains stdlib-only during bootstrap. After installing requirements in the managed venv, it runs a short configuration step using that interpreter. The step prompts/saves a missing key in `backend/.env`, returns only nonsecret port/model/delay values, and preserves launcher defaults (loopback binding and a one-second guess delay when unset). Credentials are not sent to dependency installers or the frontend. No actual local credential file is migrated or deleted by the refactor.
+
+`app.serve()` closes the listener and awaits `Rooms.shutdown()` even on cancellation or bind failure, then waits for socket handlers to close. Room shutdown blocks new operations, detaches memberships/rooms before awaiting disposal, and attempts cleanup of every runtime without triggering ready-room startup or AI takeover. Socket closure remains owned by the WebSocket library. The existing per-runtime cancellation/client-cleanup protections remain in effect.
+
+Current verification: 126 backend, 29 frontend, and 15 launcher tests pass. Additional coverage includes import safety without credentials, dotenv/environment precedence, safe validation/settings repr, explicit AI/model wiring, startup failure, shutdown during pending AI/roster delivery, and launcher secret isolation.
 
 The original review and its file/line references below are retained as the **pre-refactor baseline**, not a claim that superseded implementation details still exist. Its historical test results likewise refer to that review run; see the backend regression and architecture-boundary suites for the updated structure.
 

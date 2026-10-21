@@ -2,7 +2,7 @@
 
 import asyncio
 
-from codenames.message_router.message_router import MessageRouter
+from codenames.messages import MessageRouter
 from codenames.model import Role
 from tests.helpers import context_for, make_service, make_user
 
@@ -30,7 +30,7 @@ async def test_message_routing_and_lobby_handlers():
     }
     result = await router.route_message(context, "createLobby", {"name": "Test Lobby"})
     assert result["lobbyId"] == context.lobby_id
-    assert (await service.get_lobby(context.lobby_id)).name == "Test Lobby"
+    assert service.get_lobby(context.lobby_id).name == "Test Lobby"
 
 
 async def test_human_input_not_buffered_during_ai_turns():

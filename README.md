@@ -32,20 +32,27 @@ python dev.py
 
 The launcher installs dependencies on first run, starts both servers, and opens **http://localhost:3000/codenames**. Later runs reuse the installed dependencies unless their requirements change. Press **Ctrl+C** to stop both servers.
 
-It uses `OPENAI_KEY` or the existing `backend/.properties.json`. If neither supplies a key, it prompts once and saves it in that Git-ignored local configuration. Use `python dev.py --no-browser` to skip opening a browser, or `--port 3001 --backend-port 8001` if the default ports are occupied.
+It uses `OPENAI_API_KEY` from the environment or `backend/.env`. If neither supplies a key, it prompts once and saves it in that Git-ignored `.env` file. Environment variables override `.env` values. The launcher installs dependencies before reading `.env`, using its managed Python environment; no global dotenv installation is needed. Use `python dev.py --no-browser` to skip opening a browser, or `--port 3001 --backend-port 8001` if the default ports are occupied.
 
 ### Manual setup
 
-To run the backend, create a `backend/.properties.json` file containing the following properties:
+Copy `backend/.env.example` to `backend/.env` and set `OPENAI_API_KEY`, or supply the environment variables directly. `.env` is optional and never overrides the real process environment. Values are literal (no `${...}` interpolation).
 
-* openaiKey - An open AI key
-* gptModel - Which model to use, e.g. `gpt-4o`
-* guessDelay - (Optional) The time in seconds that the AI will delay before supplying a clue or guess. The AI will otherwise play incomprehinsibly quickly
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| `OPENAI_API_KEY` | Required | OpenAI credential; validated at startup, not import time |
+| `HOST` | `0.0.0.0` | Backend bind address |
+| `WEBSOCKET_PORT` | `8000` | Backend port |
+| `GPT_MODEL` | `gpt-4o` | OpenAI model |
+| `GUESS_DELAY` | `0` | Nonnegative whole seconds between AI guesses; launcher defaults to `1` if unset |
 
-Then the server can be start using:
+The old `.properties.json` format and `OPENAI_KEY` name are no longer supported. Existing local credential files are not migrated or deleted automatically. Keep `.env` private; it is excluded from Git and Docker build contexts.
+
+Start the backend with:
 
 ```sh
 cd backend
+python -m pip install -r requirements.txt
 python run.py
 ```
 
@@ -54,8 +61,10 @@ or run as a docker image:
 ```sh
 cd backend
 docker build -t codenames-backend .
-docker run -e OPENAI_KEY="<key>" -p 8000:8000 codenames-backend
+docker run -e OPENAI_API_KEY -p 8000:8000 codenames-backend
 ```
+
+Export `OPENAI_API_KEY` in your shell before the Docker run command (or inject it through your deployment secret mechanism). The local `.env` file is not bundled into the image.
 
 The UI can be started with:
 
@@ -76,9 +85,10 @@ docker run -e NEXT_PUBLIC_WEBSOCKET_URL="<url>" -p 3000:3000 codenames-ui
 
 Use Python 3.12 and Node.js 20.19+ (or 22.12+). Tests mock OpenAI and do not require a real API key or a running server.
 
-Launcher tests, from the repository root:
+Launcher tests, from the repository root (install backend test dependencies in the Python environment you use for tests):
 
 ```sh
+python -m pip install -r backend/requirements-dev.txt
 python -m unittest discover -s tests -v
 ```
 

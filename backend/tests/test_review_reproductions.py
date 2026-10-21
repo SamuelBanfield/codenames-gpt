@@ -4,7 +4,7 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from codenames.message_router.message_router import MessageRouter
+from codenames.messages import MessageRouter
 from codenames.model import Role, Tile
 from codenames.websocket_server import WebSocketServer
 from tests.helpers import connection_for, context_for, make_runtime, make_service, make_user
@@ -13,12 +13,12 @@ pytestmark = pytest.mark.reproduction
 
 
 @pytest.fixture
-def game(monkeypatch):
+async def game(monkeypatch):
     monkeypatch.setattr("codenames.game.game.generate_tiles", lambda: [
         Tile("APPLE", "red"), Tile("ORANGE", "red"), Tile("BERRY", "red"),
         Tile("OCEAN", "blue"), Tile("SKY", "blue"), Tile("DEATH", "assassin"),
     ])
-    return make_runtime([make_user(role.name, role) for role in Role])
+    return await make_runtime([make_user(role.name, role) for role in Role])
 
 
 @pytest.fixture
@@ -68,7 +68,7 @@ async def test_02_disconnected_player_is_removed_from_game_roster(game, service)
     lobby = await service.create_lobby(users[0], "Disconnect test")
     for user in users[1:]:
         await service.join_lobby(user, lobby.id)
-    lobby.game = make_runtime(lobby.users)
+    lobby.game = await make_runtime(lobby.users)
     await WebSocketServer(service)._cleanup_connection(context_for(users[0]))
     assert users[0] not in lobby.users
     assert users[0] not in lobby.game.state.users
@@ -79,7 +79,8 @@ async def test_02_broadcast_after_disconnect_reaches_remaining_players(game, ser
     lobby = await service.create_lobby(departed, "Broadcast test")
     for user in game.state.users[1:]:
         await service.join_lobby(user, lobby.id)
-    lobby.game = make_runtime(lobby.users)
+    lobby.game = await make_runtime(lobby.users)
+    connection_for(departed).send.reset_mock()
     await service.leave_lobby(departed, lobby.id)
     connection_for(departed).send.side_effect = ConnectionError("socket is closed")
     await lobby.game.broadcast_state_update(False)
@@ -186,7 +187,7 @@ async def test_07_connection_is_not_left_in_multiple_lobbies(service, operation)
         destination = await service.create_lobby(make_user("Other owner"), "Second")
         data = {"lobbyId": destination.id}
     await router.route_message(context, operation, data)
-    memberships = [lobby for lobby in await service.repository.list_lobbies() if user in lobby.users]
+    memberships = [lobby for lobby in service.list_lobbies() if user in lobby.users]
     assert len(memberships) == 1
     assert memberships[0].id == context.lobby_id
 
@@ -205,7 +206,7 @@ async def test_07_disconnect_cleans_all_membership_after_repeated_create(service
     for name in ("First", "Second"):
         await MessageRouter(service).route_message(context, "createLobby", {"name": name})
     await WebSocketServer(service)._cleanup_connection(context)
-    assert not any(user in lobby.users for lobby in await service.repository.list_lobbies())
+    assert not any(user in lobby.users for lobby in service.list_lobbies())
 
 
 async def test_control_empty_ai_response_already_passes_the_turn(game):
