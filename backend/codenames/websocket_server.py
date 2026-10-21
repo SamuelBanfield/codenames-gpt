@@ -41,11 +41,11 @@ class WebSocketServer:
             async for raw_message in websocket:
                 try:
                     await self._handle_message(user_context, raw_message)
-                except Exception as e:
+                except Exception:
                     logger.error(f"Error for player {user.id} with message {raw_message}: {traceback.format_exc()}")
         except websockets.exceptions.ConnectionClosed:
             logger.info("Connection for player %s closed normally", user.id)
-        except Exception as e:
+        except Exception:
             logger.error(f"Error for player {user.id}: {traceback.format_exc()}")
         finally:
             await self._cleanup_connection(user_context)
